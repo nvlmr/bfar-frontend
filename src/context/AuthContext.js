@@ -5,18 +5,16 @@ const AuthContext = createContext();
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
-console.log("BACKEND_URL:", BACKEND_URL);
-console.log("API:", API);
-
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Load user from localStorage on refresh
   useEffect(() => {
     const token = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
-    
+
     if (token && savedUser) {
       try {
         const parsedUser = JSON.parse(savedUser);
@@ -25,36 +23,52 @@ export const AuthProvider = ({ children }) => {
       } catch (e) {
         console.error('Failed to parse user from localStorage');
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
       }
     }
+
     setLoading(false);
   }, []);
 
+  // ✅ UPDATED LOGIN FUNCTION
   const login = async (email, password) => {
-  try {
-    const response = await axios.post(`${API}/auth/login`, { email, password });
+    try {
+      const response = await axios.post(`${API}/auth/login`, {
+        email,
+        password
+      });
 
-    const { idToken, refreshToken, expiresIn } = response.data;
+      const {
+        access_token,
+        refreshToken,
+        expiresIn,
+        user: userData
+      } = response.data;
 
-    // Store token
-    localStorage.setItem('token', idToken);
-    localStorage.setItem('refreshToken', refreshToken);
-    localStorage.setItem('expiresIn', expiresIn);
+      // Store tokens
+      localStorage.setItem('token', access_token);
+      localStorage.setItem('refreshToken', refreshToken);
+      localStorage.setItem('expiresIn', expiresIn);
 
-    axios.defaults.headers.common['Authorization'] = `Bearer ${idToken}`;
+      axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
-    const userInfo = { email };
-    localStorage.setItem('user', JSON.stringify(userInfo));
-    setUser(userInfo);
+      // Store full user object including status
+      const userInfo = {
+        email: userData.email,
+        status: userData.status,
+        full_name: userData.full_name
+      };
 
-    return userInfo;
+      localStorage.setItem('user', JSON.stringify(userInfo));
+      setUser(userInfo);
 
-  } catch (error) {
-    console.error('Login error:', error.response?.data || error.message);
-    throw error;
-  }
-};
+      return userInfo;
 
+    } catch (error) {
+      console.error('Login error:', error.response?.data || error.message);
+      throw error;
+    }
+  };
 
   const signup = async (first_name, middle_name, last_name, email, password) => {
     try {
@@ -76,7 +90,10 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('expiresIn');
     localStorage.removeItem('user');
+
     delete axios.defaults.headers.common['Authorization'];
     setUser(null);
   };
