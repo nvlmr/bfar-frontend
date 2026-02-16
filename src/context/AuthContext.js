@@ -5,6 +5,9 @@ const AuthContext = createContext();
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+console.log("BACKEND_URL:", BACKEND_URL);
+console.log("API:", API);
+
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -28,44 +31,33 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    try {
-      const response = await axios.post(`${API}/auth/login`, { email, password });
-      
-      console.log('Login response:', response.data);
+  try {
+    const response = await axios.post(`${API}/auth/login`, { email, password });
 
-      // ✅ BACKEND RETURNS access_token (NOT idToken)
-      const { access_token, user: userData } = response.data;
+    const { idToken, refreshToken, expiresIn } = response.data;
 
-      // Store token
-      localStorage.setItem('token', access_token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+    // Store token
+    localStorage.setItem('token', idToken);
+    localStorage.setItem('refreshToken', refreshToken);
+    localStorage.setItem('expiresIn', expiresIn);
 
-      // Store user data
-      const userInfo = { 
-        email: userData.email,
-        status: userData.status 
-      };
-      
-      localStorage.setItem('user', JSON.stringify(userInfo));
-      setUser(userInfo);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${idToken}`;
 
-      return userInfo;
-    } catch (error) {
-      console.error('Login error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
-      throw error;
-    }
-  };
+    const userInfo = { email };
+    localStorage.setItem('user', JSON.stringify(userInfo));
+    setUser(userInfo);
+
+    return userInfo;
+
+  } catch (error) {
+    console.error('Login error:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
 
   const signup = async (first_name, middle_name, last_name, email, password) => {
     try {
-      console.log('Sending signup request with:', { 
-        first_name, middle_name, last_name, email 
-      });
-
       const response = await axios.post(`${API}/auth/register`, {
         first_name,
         middle_name: middle_name || '',
@@ -74,8 +66,8 @@ export const AuthProvider = ({ children }) => {
         password
       });
 
-      console.log('Signup response:', response.data);
       return response.data;
+
     } catch (error) {
       console.error('Signup error:', error.response?.data || error.message);
       throw error;
