@@ -77,10 +77,10 @@ const FormFill = () => {
         answer: answers[q.id]
       }));
 
-      await axios.post(`${API}/responses`, {
-        form_id: id,
-        answers: formattedAnswers
-      });
+    await axios.post(`${API}/forms/public/${id}/responses`, {
+      answers: formattedAnswers
+    });
+
 
       setSubmitted(true);
       toast.success('Response submitted successfully!');

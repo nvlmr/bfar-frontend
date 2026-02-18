@@ -22,6 +22,12 @@ const Dashboard = () => {
       // Optionally disable create form button
     }
   }, [user]);
+  
+  useEffect(() => {
+  if (user) {
+    fetchForms();
+  }
+  }, [user]);
 
   const fetchForms = async () => {
     try {

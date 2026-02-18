@@ -24,10 +24,11 @@ const FormResponses = () => {
     try {
       const [formRes, responsesRes] = await Promise.all([
         axios.get(`${API}/forms/${id}`),
-        axios.get(`${API}/responses/${id}`)
+        axios.get(`${API}/forms/${id}/responses`)
       ]);
-      setForm(formRes.data);
+      setForm(formRes.data); 
       setResponses(responsesRes.data);
+      console.log(responsesRes.data);
     } catch (error) {
       toast.error('Failed to fetch responses');
       navigate('/dashboard');
@@ -44,8 +45,12 @@ const FormResponses = () => {
 
     const headers = ['Response ID', 'Submitted At', ...form.questions.map((q) => q.title)];
     const rows = responses.map((response) => {
-      const row = [response.id, new Date(response.submitted_at).toLocaleString()];
-      form.questions.forEach((question) => {
+    const submittedDate = response.submitted_at?._seconds
+      ? new Date(response.submitted_at._seconds * 1000).toLocaleString()
+      : "No date";
+    const row = [response.id, submittedDate];
+
+      form.questions.forEach((questiofn) => {
         const answer = response.answers.find((a) => a.question_id === question.id);
         if (answer) {
           if (Array.isArray(answer.answer)) {
@@ -127,7 +132,11 @@ const FormResponses = () => {
               <Card key={response.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-6" data-testid={`response-${rIndex}`}>
                 <div className="mb-4 pb-4 border-b border-slate-100">
                   <p className="text-sm text-slate-500">
-                    Submitted: {new Date(response.submitted_at).toLocaleString()}
+                    Submitted: {
+                      response.submitted_at?._seconds
+                        ? new Date(response.submitted_at._seconds * 1000).toLocaleString()
+                        : "No date"
+                    }
                   </p>
                 </div>
                 <div className="space-y-4">
