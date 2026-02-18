@@ -50,7 +50,7 @@ const FormResponses = () => {
       : "No date";
     const row = [response.id, submittedDate];
 
-      form.questions.forEach((questiofn) => {
+      form.questions.forEach((question) => {
         const answer = response.answers.find((a) => a.question_id === question.id);
         if (answer) {
           if (Array.isArray(answer.answer)) {
