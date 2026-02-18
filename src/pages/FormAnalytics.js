@@ -30,6 +30,7 @@ const FormAnalytics = () => {
   const [form, setForm] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [chartType, setChartType] = useState("bar"); // ✅ Dropdown state
 
   useEffect(() => {
     fetchData();
@@ -62,8 +63,6 @@ const FormAnalytics = () => {
     }
   };
 
-
-  // ✅ Prevent crash while loading
   if (loading || !form || !analytics) {
     return (
       <div className="min-h-screen bg-[#F8FDFF] flex items-center justify-center">
@@ -77,8 +76,10 @@ const FormAnalytics = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FDFF]">
+
+      {/* Navbar */}
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <Button
             onClick={() => navigate('/dashboard')}
             variant="ghost"
@@ -90,8 +91,9 @@ const FormAnalytics = () => {
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="max-w-7xl mx-auto px-4 py-12">
 
+        {/* Title */}
         <div className="mb-8">
           <h2 className="text-3xl md:text-4xl font-semibold text-[#003366] mb-2">
             {form.title}
@@ -100,6 +102,20 @@ const FormAnalytics = () => {
             Analytics Overview - {totalResponses} {totalResponses === 1 ? 'response' : 'responses'}
           </p>
         </div>
+
+        {/* Chart Type Dropdown */}
+        {totalResponses > 0 && (
+          <div className="flex justify-end mb-6">
+            <select
+              value={chartType}
+              onChange={(e) => setChartType(e.target.value)}
+              className="border border-slate-300 rounded-lg px-4 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#003366]"
+            >
+              <option value="bar">Bar Chart</option>
+              <option value="pie">Pie Chart</option>
+            </select>
+          </div>
+        )}
 
         {totalResponses === 0 ? (
           <div className="text-center py-20">
@@ -119,9 +135,9 @@ const FormAnalytics = () => {
 
               if (!questionData) return null;
 
-              // -----------------------
-              // MULTIPLE CHOICE TYPES
-              // -----------------------
+              // ------------------------
+              // MULTIPLE CHOICE
+              // ------------------------
               if (['multiple_choice', 'checkboxes', 'dropdown'].includes(questionData.type)) {
 
                 const chartData = (questionData.responses || []).map((r) => ({
@@ -136,21 +152,43 @@ const FormAnalytics = () => {
                     </h3>
 
                     <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="value" fill="#003366" />
-                      </BarChart>
+                      {chartType === "bar" ? (
+                        <BarChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <Tooltip />
+                          <Bar dataKey="value" fill="#003366" />
+                        </BarChart>
+                      ) : (
+                        <PieChart>
+                          <Pie
+                            data={chartData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={100}
+                            label
+                          >
+                            {chartData.map((entry, i) => (
+                              <Cell
+                                key={`cell-${i}`}
+                                fill={COLORS[i % COLORS.length]}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      )}
                     </ResponsiveContainer>
                   </Card>
                 );
               }
 
-              // -----------------------
+              // ------------------------
               // RATING
-              // -----------------------
+              // ------------------------
               if (questionData.type === 'rating') {
 
                 const ratingCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
@@ -182,21 +220,43 @@ const FormAnalytics = () => {
                     </p>
 
                     <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="value" fill="#00AEEF" />
-                      </BarChart>
+                      {chartType === "bar" ? (
+                        <BarChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <Tooltip />
+                          <Bar dataKey="value" fill="#00AEEF" />
+                        </BarChart>
+                      ) : (
+                        <PieChart>
+                          <Pie
+                            data={chartData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={100}
+                            label
+                          >
+                            {chartData.map((entry, i) => (
+                              <Cell
+                                key={`cell-${i}`}
+                                fill={COLORS[i % COLORS.length]}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      )}
                     </ResponsiveContainer>
                   </Card>
                 );
               }
 
-              // -----------------------
+              // ------------------------
               // TEXT RESPONSES
-              // -----------------------
+              // ------------------------
               return (
                 <Card key={index} className="p-6">
                   <h3 className="text-xl font-semibold text-[#003366] mb-4">
