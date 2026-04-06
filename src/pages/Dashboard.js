@@ -201,8 +201,8 @@ const Dashboard = () => {
       <Fish className="pointer-events-none absolute top-28 right-28 w-10 h-10 text-cyan-300/20 animate-fish1" />
       <Fish className="pointer-events-none absolute bottom-28 left-28 w-8 h-8 text-blue-300/15 transform -scale-x-100 animate-fish2" />
 
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-xl border-b border-slate-200/70 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-slate-200/70 shadow-sm w-full">
+        <div className="w-full px-2 sm:px-4 lg:px-6 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-500 shadow-lg shadow-cyan-500/20 flex items-center justify-center">
               <FileText className="w-6 h-6 text-white" />
@@ -231,9 +231,9 @@ const Dashboard = () => {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8 relative z-10">
-        <section className="rounded-[2rem] border border-slate-200/70 bg-white/90 shadow-xl shadow-slate-900/5 p-8 overflow-hidden">
-          <div className="grid gap-8 lg:grid-cols-[1.4fr_0.6fr] items-center">
+      <main className="w-full px-2 sm:px-4 lg:px-6 py-6 space-y-6 relative z-10">
+        <section className="rounded-[2rem] border border-slate-200/70 bg-white/90 shadow-xl shadow-slate-900/5 p-6 overflow-hidden">
+          <div className="grid gap-6 lg:grid-cols-2 items-center">
             <div>
               <p className="text-sm uppercase tracking-[0.24em] text-cyan-600 mb-3">Welcome back</p>
               <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 leading-tight mb-4">
@@ -258,8 +258,8 @@ const Dashboard = () => {
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[1.7fr_0.9fr]">
-          <div className="rounded-3xl bg-white border border-slate-200/70 shadow-lg shadow-slate-900/5 p-6">
+        <section className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-3xl bg-white border border-slate-200/70 shadow-lg shadow-slate-900/5 p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />

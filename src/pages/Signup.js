@@ -135,13 +135,13 @@ const Signup = () => {
       </div>
 
       {/* Right Panel - Signup Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 lg:p-12 bg-white relative overflow-y-auto">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-2 lg:p-4 bg-white relative overflow-hidden min-h-screen max-h-screen">
         {/* Decorative Blurs */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-50 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-50 rounded-full blur-3xl"></div>
 
         {/* Form Container */}
-        <div className="w-full max-w-md z-10 animate-fadeInUp my-8">
+        <div className="w-full max-w-lg z-10 animate-fadeInUp my-2 h-full flex flex-col justify-center">
           {/* Back Button */}
           <Link to="/" className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-8 group transition-colors">
             <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
@@ -166,131 +166,134 @@ const Signup = () => {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4" data-testid="signup-form">
-            {/* First Name */}
-            <div>
-              <Label htmlFor="firstName" className="text-sm font-medium text-gray-700 mb-2 block">First Name</Label>
-              <div className="relative group">
-                <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
-                <Input
-                  id="firstName"
-                  name="firstName"
-                  type="text"
-                  placeholder="Juan"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  className="pl-12 pr-4 py-3.5 border-2 border-gray-200 rounded-lg focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 outline-none transition-all"
-                  required
-                />
+
+          <form onSubmit={handleSubmit} className="space-y-3" data-testid="signup-form" style={{maxHeight: '100%', overflow: 'hidden'}}>
+            {/* First Name & Middle Name Side by Side */}
+            <div className="flex flex-col md:flex-row md:space-x-3">
+              <div className="flex-1">
+                <Label htmlFor="firstName" className="text-sm font-medium text-gray-700 mb-2 block">First Name</Label>
+                <div className="relative group">
+                  <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
+                  <Input
+                    id="firstName"
+                    name="firstName"
+                    type="text"
+                    placeholder="Juan"
+                    value={formData.firstName}
+                    onChange={handleChange}
+                    className="pl-12 pr-4 py-3.5 border-2 border-gray-200 rounded-lg focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 outline-none transition-all"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="flex-1 mt-3 md:mt-0">
+                <Label htmlFor="middleName" className="text-sm font-medium text-gray-700 mb-2 block">
+                  Middle Name <span className="text-gray-400">(Optional)</span>
+                </Label>
+                <div className="relative group">
+                  <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
+                  <Input
+                    id="middleName"
+                    name="middleName"
+                    type="text"
+                    placeholder="Dela Cruz"
+                    value={formData.middleName}
+                    onChange={handleChange}
+                    className="pl-12 pr-4 py-3.5 border-2 border-gray-200 rounded-lg focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 outline-none transition-all"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Middle Name */}
-            <div>
-              <Label htmlFor="middleName" className="text-sm font-medium text-gray-700 mb-2 block">
-                Middle Name <span className="text-gray-400">(Optional)</span>
-              </Label>
-              <div className="relative group">
-                <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
-                <Input
-                  id="middleName"
-                  name="middleName"
-                  type="text"
-                  placeholder="Dela Cruz"
-                  value={formData.middleName}
-                  onChange={handleChange}
-                  className="pl-12 pr-4 py-3.5 border-2 border-gray-200 rounded-lg focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 outline-none transition-all"
-                />
+
+            {/* Last Name & Email Side by Side */}
+            <div className="flex flex-col md:flex-row md:space-x-3">
+              <div className="flex-1">
+                <Label htmlFor="lastName" className="text-sm font-medium text-gray-700 mb-2 block">Last Name</Label>
+                <div className="relative group">
+                  <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
+                  <Input
+                    id="lastName"
+                    name="lastName"
+                    type="text"
+                    placeholder="Santos"
+                    value={formData.lastName}
+                    onChange={handleChange}
+                    className="pl-12 pr-4 py-3.5 border-2 border-gray-200 rounded-lg focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 outline-none transition-all"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="flex-1 mt-3 md:mt-0">
+                <Label htmlFor="email" className="text-sm font-medium text-gray-700 mb-2 block">Email Address</Label>
+                <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
+                  <Input
+                    id="email"
+                    name="email"
+                    data-testid="signup-email-input"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="pl-12 pr-4 py-3.5 border-2 border-gray-200 rounded-lg focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 outline-none transition-all"
+                    required
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Last Name */}
-            <div>
-              <Label htmlFor="lastName" className="text-sm font-medium text-gray-700 mb-2 block">Last Name</Label>
-              <div className="relative group">
-                <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
-                <Input
-                  id="lastName"
-                  name="lastName"
-                  type="text"
-                  placeholder="Santos"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  className="pl-12 pr-4 py-3.5 border-2 border-gray-200 rounded-lg focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 outline-none transition-all"
-                  required
-                />
-              </div>
-            </div>
 
-            {/* Email */}
-            <div>
-              <Label htmlFor="email" className="text-sm font-medium text-gray-700 mb-2 block">Email Address</Label>
-              <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
-                <Input
-                  id="email"
-                  name="email"
-                  data-testid="signup-email-input"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="pl-12 pr-4 py-3.5 border-2 border-gray-200 rounded-lg focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 outline-none transition-all"
-                  required
-                />
+            {/* Password & Confirm Password Side by Side */}
+            <div className="flex flex-col md:flex-row md:space-x-3">
+              <div className="flex-1">
+                <Label htmlFor="password" className="text-sm font-medium text-gray-700 mb-2 block">Password</Label>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
+                  <Input
+                    id="password"
+                    name="password"
+                    data-testid="signup-password-input"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="pl-12 pr-14 py-3.5 border-2 border-gray-200 rounded-lg focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 outline-none transition-all"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-cyan-500 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1.5">Must be at least 6 characters</p>
               </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <Label htmlFor="password" className="text-sm font-medium text-gray-700 mb-2 block">Password</Label>
-              <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
-                <Input
-                  id="password"
-                  name="password"
-                  data-testid="signup-password-input"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="pl-12 pr-14 py-3.5 border-2 border-gray-200 rounded-lg focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 outline-none transition-all"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-cyan-500 transition-colors"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 mt-1.5">Must be at least 6 characters</p>
-            </div>
-
-            {/* Confirm Password */}
-            <div>
-              <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700 mb-2 block">Confirm Password</Label>
-              <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
-                <Input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  data-testid="signup-confirm-password-input"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  className="pl-12 pr-14 py-3.5 border-2 border-gray-200 rounded-lg focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 outline-none transition-all"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-cyan-500 transition-colors"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
+              <div className="flex-1 mt-3 md:mt-0">
+                <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700 mb-2 block">Confirm Password</Label>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-cyan-500 transition-colors" />
+                  <Input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    data-testid="signup-confirm-password-input"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    className="pl-12 pr-14 py-3.5 border-2 border-gray-200 rounded-lg focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 outline-none transition-all"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-cyan-500 transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
             </div>
 
