@@ -10,6 +10,8 @@ import { Switch } from '@/components/ui/switch';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import axios from 'axios';
+import { preprocessFormData } from '../lib/preprocessing';
+import { api } from '../lib/apiMiddleware';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -45,7 +47,7 @@ const FormBuilder = () => {
 
   const fetchForm = async () => {
     try {
-      const response = await axios.get(`${API}/forms/${id}`);
+      const response = await api.get(`/forms/${id}`);
       setFormData(response.data);
     } catch (error) {
       toast.error('Failed to fetch form');
@@ -71,53 +73,92 @@ const FormBuilder = () => {
   };
 
   const updateQuestion = (index, field, value) => {
-    const updatedQuestions = [...formData.questions];
-    updatedQuestions[index] = {
-      ...updatedQuestions[index],
-      [field]: value
-    };
-    setFormData({ ...formData, questions: updatedQuestions });
+    setFormData((prev) => {
+      const updatedQuestions = [...prev.questions];
+      updatedQuestions[index] = {
+        ...updatedQuestions[index],
+        [field]: value
+      };
+      return { ...prev, questions: updatedQuestions };
+    });
+  };
+
+  const handleTypeChange = (questionIndex, value) => {
+    setFormData((prev) => {
+      const updatedQuestions = [...prev.questions];
+      const question = { ...updatedQuestions[questionIndex], type: value };
+
+      if (['multiple_choice', 'checkboxes', 'dropdown'].includes(value)) {
+        question.options = question.options && question.options.length > 0 ? question.options : ['Option 1', 'Option 2'];
+      } else {
+        delete question.options;
+      }
+
+      updatedQuestions[questionIndex] = question;
+      return { ...prev, questions: updatedQuestions };
+    });
   };
 
   const deleteQuestion = (index) => {
-    const updatedQuestions = formData.questions.filter((_, i) => i !== index);
-    setFormData({ ...formData, questions: updatedQuestions });
+    setFormData((prev) => ({
+      ...prev,
+      questions: prev.questions.filter((_, i) => i !== index)
+    }));
   };
 
   const addOption = (questionIndex) => {
-    const updatedQuestions = [...formData.questions];
-    if (!updatedQuestions[questionIndex].options) {
-      updatedQuestions[questionIndex].options = [];
-    }
-    updatedQuestions[questionIndex].options.push('');
-    setFormData({ ...formData, questions: updatedQuestions });
+    setFormData((prev) => {
+      const updatedQuestions = [...prev.questions];
+      const question = { ...updatedQuestions[questionIndex] };
+
+      if (!question.options) {
+        question.options = [];
+      }
+      question.options = [...question.options, ''];
+      updatedQuestions[questionIndex] = question;
+
+      return { ...prev, questions: updatedQuestions };
+    });
   };
 
   const updateOption = (questionIndex, optionIndex, value) => {
-    const updatedQuestions = [...formData.questions];
-    updatedQuestions[questionIndex].options[optionIndex] = value;
-    setFormData({ ...formData, questions: updatedQuestions });
+    setFormData((prev) => {
+      const updatedQuestions = [...prev.questions];
+      const question = { ...updatedQuestions[questionIndex] };
+      question.options = [...(question.options || [])];
+      question.options[optionIndex] = value;
+      updatedQuestions[questionIndex] = question;
+      return { ...prev, questions: updatedQuestions };
+    });
   };
 
   const deleteOption = (questionIndex, optionIndex) => {
-    const updatedQuestions = [...formData.questions];
-    updatedQuestions[questionIndex].options = updatedQuestions[questionIndex].options.filter((_, i) => i !== optionIndex);
-    setFormData({ ...formData, questions: updatedQuestions });
+    setFormData((prev) => {
+      const updatedQuestions = [...prev.questions];
+      const question = { ...updatedQuestions[questionIndex] };
+      question.options = question.options.filter((_, i) => i !== optionIndex);
+      updatedQuestions[questionIndex] = question;
+      return { ...prev, questions: updatedQuestions };
+    });
   };
 
   const handleSave = async () => {
-    if (!formData.title.trim()) {
+    // Preprocess form data
+    const processedFormData = preprocessFormData(formData);
+
+    // Basic validation
+    if (!processedFormData.title.trim()) {
       toast.error('Please enter a form title');
       return;
     }
 
-    if (formData.questions.length === 0) {
+    if (processedFormData.questions.length === 0) {
       toast.error('Please add at least one question');
       return;
     }
 
-    for (let i = 0; i < formData.questions.length; i++) {
-      const q = formData.questions[i];
+    for (let i = 0; i < processedFormData.questions.length; i++) {
+      const q = processedFormData.questions[i];
       if (!q.title.trim()) {
         toast.error(`Question ${i + 1} is missing a title`);
         return;
@@ -132,11 +173,16 @@ const FormBuilder = () => {
 
     setLoading(true);
     try {
+      const now = new Date().toISOString();
+      if (!processedFormData.createdAt) {
+        processedFormData.createdAt = now;
+      }
+
       if (isEditMode) {
-        await axios.put(`${API}/forms/${id}`, formData);
+        await api.put(`/forms/${id}`, processedFormData);
         toast.success('Form updated successfully!');
       } else {
-        const response = await axios.post(`${API}/forms`, formData);
+        const response = await api.post(`/forms`, processedFormData);
         toast.success('Form created successfully!');
         navigate(`/forms/${response.data.id}/edit`);
       }
@@ -233,12 +279,7 @@ const FormBuilder = () => {
                       <Label className="text-[#003366]">Type</Label>
                       <Select
                         value={question.type}
-                        onValueChange={(value) => {
-                          updateQuestion(qIndex, 'type', value);
-                          if (['multiple_choice', 'checkboxes', 'dropdown'].includes(value) && (!question.options || question.options.length === 0)) {
-                            updateQuestion(qIndex, 'options', ['Option 1', 'Option 2']);
-                          }
-                        }}
+                        onValueChange={(value) => handleTypeChange(qIndex, value)}
                       >
                         <SelectTrigger data-testid={`question-type-${qIndex}`} className="mt-2">
                           <SelectValue />

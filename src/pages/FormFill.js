@@ -10,6 +10,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import axios from 'axios';
+import { preprocessFormAnswers, validatePreprocessedData } from '../lib/preprocessing';
+import { api } from '../lib/apiMiddleware';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -28,7 +30,7 @@ const FormFill = () => {
 
   const fetchForm = async () => {
     try {
-      const response = await axios.get(`${API}/forms/public/${id}`);
+      const response = await api.get(`/forms/public/${id}`);
       setForm(response.data);
       const initialAnswers = {};
       response.data.questions.forEach((q) => {
@@ -60,27 +62,43 @@ const FormFill = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    for (const question of form.questions) {
-      if (question.required) {
-        const answer = answers[question.id];
-        if (!answer || (Array.isArray(answer) && answer.length === 0) || answer === '') {
-          toast.error(`Please answer: ${question.title}`);
-          return;
-        }
+    // --- Prevent duplicate submissions by email ---
+    try {
+      const existingResponses = await api.get(`/forms/public/${id}/responses`);
+      const duplicate = (existingResponses.data || []).some(r => (r.email || r.user?.email || r.full_name) === answers.email);
+      if (duplicate) {
+        toast.error('This email has already submitted a response for this survey.');
+        return;
       }
+    } catch (err) {
+      // If error fetching, allow submit (fail open)
+    }
+
+    // Preprocess the answers
+    const preprocessedAnswers = preprocessFormAnswers(answers, form.questions);
+
+    // Validate preprocessed data
+    const validation = validatePreprocessedData(preprocessedAnswers, form.questions);
+    if (!validation.isValid) {
+      validation.errors.forEach(error => toast.error(error));
+      return;
     }
 
     setSubmitting(true);
     try {
       const formattedAnswers = form.questions.map((q) => ({
         question_id: q.id,
-        answer: answers[q.id]
+        answer: preprocessedAnswers[q.id]
       }));
 
-    await axios.post(`${API}/forms/public/${id}/responses`, {
-      answers: formattedAnswers
-    });
-
+      // Save user info as top-level fields for easier retrieval in FormResponses
+      await api.post(`/forms/public/${id}/responses`, {
+        email: answers.email,
+        full_name: answers.full_name,
+        age: answers.age,
+        gender: answers.gender,
+        answers: formattedAnswers
+      });
 
       setSubmitted(true);
       toast.success('Response submitted successfully!');
