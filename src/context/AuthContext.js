@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
+import { api } from '../lib/apiMiddleware';
 
 const AuthContext = createContext();
 
@@ -21,7 +22,7 @@ export const AuthProvider = ({ children }) => {
         setUser(parsedUser);
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       } catch (e) {
-        console.error('Failed to parse user from localStorage');
+        // console.error('Failed to parse user from localStorage');
         localStorage.removeItem('user');
         localStorage.removeItem('token');
       }
@@ -33,7 +34,7 @@ export const AuthProvider = ({ children }) => {
   // ✅ UPDATED LOGIN FUNCTION
   const login = async (email, password) => {
     try {
-      const response = await axios.post(`${API}/auth/login`, {
+      const response = await api.post(`/auth/login`, {
         email,
         password
       });
@@ -65,14 +66,14 @@ export const AuthProvider = ({ children }) => {
       return userInfo;
 
     } catch (error) {
-      console.error('Login error:', error.response?.data || error.message);
+      // console.error('Login error:', error.response?.data || error.message);
       throw error;
     }
   };
 
   const signup = async (first_name, middle_name, last_name, email, password) => {
     try {
-      const response = await axios.post(`${API}/auth/register`, {
+      const response = await api.post(`/auth/register`, {
         first_name,
         middle_name: middle_name || '',
         last_name,
@@ -83,7 +84,7 @@ export const AuthProvider = ({ children }) => {
       return response.data;
 
     } catch (error) {
-      console.error('Signup error:', error.response?.data || error.message);
+      // console.error('Signup error:', error.response?.data || error.message);
       throw error;
     }
   };

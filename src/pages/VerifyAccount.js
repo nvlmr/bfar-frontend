@@ -4,6 +4,7 @@ import { CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import axios from 'axios';
+import { api } from '../lib/apiMiddleware';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -25,7 +26,7 @@ const VerifyAccount = () => {
       }
 
       try {
-        const response = await axios.get(`${API}/auth/verify_account`, {
+        const response = await api.get(`/auth/verify_account`, {
           params: { token }
         });
         setStatus('success');
