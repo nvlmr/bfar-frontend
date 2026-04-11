@@ -16,9 +16,8 @@ import { api } from '../lib/apiMiddleware';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Updated: removed short_text and long_text
 const QUESTION_TYPES = [
-  { value: 'short_text', label: 'Short Text' },
-  { value: 'long_text', label: 'Long Text' },
   { value: 'multiple_choice', label: 'Multiple Choice' },
   { value: 'checkboxes', label: 'Checkboxes' },
   { value: 'dropdown', label: 'Dropdown' },
@@ -60,11 +59,11 @@ const FormBuilder = () => {
   const addQuestion = () => {
     const newQuestion = {
       id: `q_${Date.now()}`,
-      type: 'short_text',
+      type: 'multiple_choice',               // default changed
       title: '',
       description: '',
       required: false,
-      options: []
+      options: ['Option 1', 'Option 2']      // now needed for multiple_choice
     };
     setFormData({
       ...formData,
@@ -143,10 +142,8 @@ const FormBuilder = () => {
   };
 
   const handleSave = async () => {
-    // Preprocess form data
     const processedFormData = preprocessFormData(formData);
 
-    // Basic validation
     if (!processedFormData.title.trim()) {
       toast.error('Please enter a form title');
       return;
