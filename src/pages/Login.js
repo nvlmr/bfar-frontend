@@ -84,12 +84,12 @@ const Login = () => {
 
           {/* Gradient Text */}
           <h2 className="text-5xl lg:text-6xl font-bold mb-6 leading-tight animate-fadeInUp bg-gradient-to-r from-cyan-300 to-blue-300 bg-clip-text text-transparent" style={{animationDelay: '0.4s'}}>
-            BFAR e-Forms
+            GA e-Forms
           </h2>
 
           {/* Description */}
           <p className="text-xl text-white/80 leading-relaxed mb-10 animate-fadeInUp" style={{animationDelay: '0.6s'}}>
-            Streamline your data collection and fisheries management with our comprehensive digital platform.
+            Streamline your data collection and assessment processes with a comprehensive digital platform.
           </p>
 
           {/* Feature List */}
@@ -97,7 +97,7 @@ const Login = () => {
             {[
               "Secure data collection and management",
               "Real-time survey analytics",
-              "Fisheries resource tracking"
+              "Efficient tracking of assessment responses"
             ].map((feature, index) => (
               <div key={index} className="flex items-center space-x-3">
                 <CheckCircle className="w-6 h-6 text-cyan-300 flex-shrink-0" />
@@ -128,7 +128,7 @@ const Login = () => {
               <FileText className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">BFAR e-Forms</h1>
+              <h1 className="text-2xl font-bold text-gray-900">GA e-Forms</h1>
               <p className="text-sm text-gray-500">Digital Forms Platform</p>
             </div>
           </div>
