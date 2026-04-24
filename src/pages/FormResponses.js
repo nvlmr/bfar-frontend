@@ -7,7 +7,11 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { api } from '../lib/apiMiddleware';
-import { preprocessResponsesForML } from '../lib/preprocessing';
+import { 
+  preprocessResponsesForML, 
+  mapResponseToBFARColumns,
+  generateBFARHeaders 
+} from '../lib/preprocessing';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -49,41 +53,42 @@ const FormResponses = () => {
     }
   };
 
+  const escapeCsvValue = (value) => {
+    const text = value === null || value === undefined ? '' : String(value);
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+
   const downloadCSV = () => {
     if (responses.length === 0) {
       toast.error('No responses to download');
       return;
     }
-
-    const headers = ['Response ID', 'Submitted At', ...form.questions.map((q) => q.title)];
-    const rows = responses.map((response) => {
-      const submittedDate = response.submitted_at?._seconds
-        ? new Date(response.submitted_at._seconds * 1000).toLocaleString()
-        : "No date";
-      const row = [response.id, submittedDate];
-
-      form.questions.forEach((question) => {
-        const answer = response.answers.find((a) => a.question_id === question.id);
-        if (answer) {
-          if (Array.isArray(answer.answer)) {
-            row.push(answer.answer.join(', '));
-          } else {
-            row.push(answer.answer);
-          }
-        } else {
-          row.push('');
-        }
-      });
-      return row;
+    
+    // Generate headers dynamically from form questions
+    const headers = generateBFARHeaders(form.questions);
+    
+    // Map each response to CSV row
+    const rows = responses.map((response, index) => {
+      return mapResponseToBFARColumns(response, form.questions, headers, index);
     });
-
-    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
+    
+    // Build CSV string
+    const csvLines = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => escapeCsvValue(cell)).join(','))
+    ];
+    
+    const csv = csvLines.join('\r\n');
+    
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${form.title}-responses.csv`;
+    a.download = `${form.title.replace(/\s+/g, '_')}-responses.csv`;
     a.click();
+    window.URL.revokeObjectURL(url);
+    
     toast.success('CSV downloaded successfully');
   };
 
