@@ -208,7 +208,7 @@ const Dashboard = () => {
               <FileText className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="text-sm uppercase tracking-[0.18em] text-slate-500">BFAR e-Forms</p>
+              <p className="text-sm uppercase tracking-[0.18em] text-slate-500">General Assessment e-Forms</p>
               <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
             </div>
           </div>
