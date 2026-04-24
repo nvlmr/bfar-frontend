@@ -151,7 +151,7 @@ const FormFill = () => {
             <div className="w-12 h-12 bg-[#00AEEF] rounded-lg flex items-center justify-center">
               <FileText className="w-7 h-7 text-white" />
             </div>
-            <h1 className="text-xl font-bold text-[#003366]">BFAR e-Forms</h1>
+            <h1 className="text-xl font-bold text-[#003366]">General Assessment e-Forms</h1>
           </div>
           <h2 className="text-3xl md:text-4xl font-bold text-[#003366] mb-3">{form.title}</h2>
           {form.description && (
