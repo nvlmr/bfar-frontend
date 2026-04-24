@@ -109,7 +109,7 @@ const LandingPage = () => {
               <div className="w-12 h-12 bg-cyan-400 rounded-lg flex items-center justify-center shadow-lg">
                 <FileText className="w-7 h-7 text-white" />
               </div>
-              <h1 className="text-2xl font-bold text-white">BFAR e-Forms</h1>
+              <h1 className="text-2xl font-bold text-white">General Assessment e-Forms</h1>
             </div>
             <div className="flex space-x-4">
               <button
@@ -222,7 +222,7 @@ const LandingPage = () => {
             Ready to Transform Your Data Collection?
           </h2>
           <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto leading-relaxed">
-            Join thousands of fisheries professionals using BFAR e-Forms to streamline their data collection and analysis processes.
+            Join thousands of assessment professionals using GA e-Forms to streamline their data collection and analysis processes.
           </p>
           <button
             onClick={() => navigate('/signup')}
@@ -244,7 +244,7 @@ const LandingPage = () => {
                 <div className="w-10 h-10 bg-cyan-400 rounded-lg flex items-center justify-center">
                   <FileText className="w-6 h-6 text-white" />
                 </div>
-                <h3 className="text-xl font-bold text-white">BFAR e-Forms</h3>
+                <h3 className="text-xl font-bold text-white">General Assessment e-Forms</h3>
               </div>
               <p className="text-sm text-white/70 leading-relaxed">
                 Official digital forms platform of the Bureau of Fisheries and Aquatic Resources.
@@ -305,10 +305,10 @@ const LandingPage = () => {
                 <div className="flex items-center space-x-3">
                   <Mail className="w-4 h-4 text-cyan-400 flex-shrink-0" />
                   <a
-                    href="mailto:support@bfar.gov.ph"
+                    href="mailto:support@gas.gov.ph"
                     className="text-sm text-white/70 hover:text-cyan-400 transition-colors duration-200"
                   >
-                    support@bfar.gov.ph
+                    support@gas.gov.ph
                   </a>
                 </div>
                 <div className="flex items-center space-x-3">
