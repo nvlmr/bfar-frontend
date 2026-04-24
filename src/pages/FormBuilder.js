@@ -16,11 +16,12 @@ import { api } from '../lib/apiMiddleware';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// Updated: removed short_text and long_text
 const QUESTION_TYPES = [
   { value: 'multiple_choice', label: 'Multiple Choice' },
   { value: 'checkboxes', label: 'Checkboxes' },
   { value: 'dropdown', label: 'Dropdown' },
+  { value: 'short_text', label: 'Short Text' },
+  { value: 'long_text', label: 'Long Text' },
   { value: 'date', label: 'Date' },
   { value: 'rating', label: 'Rating Scale (1-5)' }
 ];
@@ -61,6 +62,7 @@ const FormBuilder = () => {
       id: `q_${Date.now()}`,
       type: 'multiple_choice',               // default changed
       title: '',
+      code: '',
       description: '',
       required: false,
       options: ['Option 1', 'Option 2']      // now needed for multiple_choice
@@ -168,6 +170,19 @@ const FormBuilder = () => {
       }
     }
 
+    // Validate unique question codes (if any codes are provided)
+    const codesWithValues = processedFormData.questions
+      .map(q => (q.code || '').trim())
+      .filter(code => code.length > 0);
+
+    if (codesWithValues.length > 0) {
+      const uniqueCodes = new Set(codesWithValues);
+      if (uniqueCodes.size !== codesWithValues.length) {
+        toast.error('Question codes must be unique');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const now = new Date().toISOString();
@@ -271,6 +286,17 @@ const FormBuilder = () => {
                         onChange={(e) => updateQuestion(qIndex, 'title', e.target.value)}
                         className="form-input mt-2"
                       />
+                      <div className="mt-3">
+                        <Label className="text-sm text-slate-600">Question Code (optional)</Label>
+                        <Input
+                          data-testid={`question-code-${qIndex}`}
+                          type="text"
+                          placeholder="B03:AGE"
+                          value={question.code || ''}
+                          onChange={(e) => updateQuestion(qIndex, 'code', e.target.value)}
+                          className="form-input mt-2"
+                        />
+                      </div>
                     </div>
                     <div className="w-48">
                       <Label className="text-[#003366]">Type</Label>
