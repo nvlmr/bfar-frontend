@@ -134,15 +134,14 @@ const LandingPage = () => {
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-32">
           <div className="text-center">
             <h2 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-white mb-6 leading-tight">
-              Streamline Data Collection for
+              Streamline General Assessment
               <br />
               <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                Philippine Aquatic Resources
+                Processes with a Digital eForms Platform
               </span>
             </h2>
             <p className="text-xl md:text-2xl text-white/80 mb-8 max-w-3xl mx-auto leading-relaxed">
-              Bureau of Fisheries and Aquatic Resources official digital forms platform.
-              Create surveys, collect responses, and analyze data efficiently.
+              A centralized platform for creating forms, collecting responses, and generating real-time insights for faster and more accurate decision-making.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <button
