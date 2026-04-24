@@ -108,14 +108,14 @@ const Signup = () => {
           <h2 className="text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight animate-fadeInUp" style={{animationDelay: '0.4s'}}>
             Join{' '}
             <span className="bg-gradient-to-r from-cyan-300 to-blue-300 bg-clip-text text-transparent">
-              BFAR e-Forms
+              GA e-Forms
             </span>{' '}
             Today
           </h2>
 
           {/* Description */}
           <p className="text-xl text-white/80 leading-relaxed mb-10 animate-fadeInUp" style={{animationDelay: '0.6s'}}>
-            Start creating professional surveys and collecting data to support Philippine fisheries and aquatic resources management.
+            Start creating professional surveys and collecting data to support efficient assessment and decision-making.
           </p>
 
           {/* Feature List */}
@@ -154,7 +154,7 @@ const Signup = () => {
               <FileText className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">BFAR e-Forms</h1>
+              <h1 className="text-2xl font-bold text-gray-900">GA e-Forms</h1>
               <p className="text-sm text-gray-500">Digital Forms Platform</p>
             </div>
           </div>
