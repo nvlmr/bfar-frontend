@@ -69,7 +69,7 @@ const ForgotPassword = () => {
               <FileText className="w-7 h-7 text-white" />
             </div>
             <div className="text-left">
-              <h1 className="text-2xl font-bold text-slate-900">BFAR e-Forms</h1>
+              <h1 className="text-2xl font-bold text-slate-900">General Assessment e-Forms</h1>
               <p className="text-sm text-slate-500">Password recovery</p>
             </div>
           </div>
@@ -144,7 +144,7 @@ const ForgotPassword = () => {
             <FileText className="w-7 h-7 text-white" />
           </div>
           <div className="text-left">
-            <h1 className="text-2xl font-bold text-gray-900">BFAR e-Forms</h1>
+            <h1 className="text-2xl font-bold text-gray-900">GA e-Forms</h1>
             <p className="text-sm text-gray-500">Password recovery</p>
           </div>
         </div>
