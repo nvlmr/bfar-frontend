@@ -595,6 +595,7 @@ export const preprocessFormData = (formData) => {
   if (processed.questions && Array.isArray(processed.questions)) {
     processed.questions = processed.questions.map(question => ({
       ...question,
+      code: question.code || '', // PRESERVE CODE FIELD
       title: preprocessText(question.title || ''),
       description: question.description ? preprocessText(question.description) : '',
       options: question.options ? question.options.map(opt => preprocessText(opt)) : []
@@ -695,6 +696,129 @@ export const sanitizeHtml = (html) => {
     .replace(/javascript:/gi, '');
 
   return sanitized;
+};
+
+/**
+ * Generates standardized CSV headers from questionnaire
+ * Following format: [SECTION][##]_[##][SUFFIX]_[DESCRIPTION]
+ * @param {Array} questions - Form questions with code field
+ * @returns {Array} Array of column header strings
+ */
+export const generateBFARHeaders = (questions) => {
+  const headers = ['RESPONDENT_ID', 'A01:CONSENT'];
+  
+  questions.forEach(question => {
+    if (!question.code) return; // Skip questions without codes
+    
+    // Parse question code (e.g., "B01.01", "D01.02A", "C03")
+    const code = question.code.trim();
+    
+    // Replace dots with underscores
+    const normalizedCode = code.replace(/\./g, '_');
+    
+    // Check if multiple-choice/checkboxes
+    if (question.type === 'checkboxes' && question.options) {
+      // Split into separate columns per option
+      question.options.forEach((option, idx) => {
+        const optionNum = String(idx + 1).padStart(2, '0');
+        const columnName = `${normalizedCode}_${optionNum}`;
+        headers.push(columnName);
+      });
+    } else {
+      // Single column
+      headers.push(normalizedCode);
+    }
+  });
+  
+  return headers;
+};
+
+/**
+ * Maps response data to BFAR CSV columns
+ * @param {Object} response - Response object
+ * @param {Array} questions - Form questions
+ * @param {Array} headers - Generated headers array
+ * @param {number} index - Response index (0-based)
+ * @returns {Array} Array of values matching header order
+ */
+export const mapResponseToBFARColumns = (response, questions, headers, index) => {
+  const row = [];
+  
+  // Helper: Get raw answer by question code
+  const getAnswerByCode = (code) => {
+    const question = questions.find(q => q.code === code);
+    if (!question) return null;
+    
+    // Add null-safety for response.answers
+    const answers = response.answers || [];
+    const ans = answers.find(a => a.question_id === question.id);
+    
+    return ans ? ans.answer : null;
+  };
+  
+  // Process each header
+  headers.forEach(header => {
+    if (header === 'RESPONDENT_ID') {
+      row.push(`GA-${String(index + 1).padStart(3, '0')}`);
+      return;
+    }
+    
+    if (header === 'A01:CONSENT') {
+      const consent = getAnswerByCode('A01');
+      row.push(consent || '');
+      return;
+    }
+    
+    // Find matching question by code
+    // Extract base code from header (remove option suffix if present)
+    let matchedValue = '';
+    
+    for (const question of questions) {
+      if (!question.code) continue;
+      
+      const normalizedCode = question.code.replace(/\./g, '_');
+      
+      if (question.type === 'checkboxes') {
+        // Check if header matches this question's option column
+        if (header.startsWith(normalizedCode + '_')) {
+          const answer = getAnswerByCode(question.code);
+          
+          // Extract option index from header
+          const optionMatch = header.match(/_([0-9]+)$/);
+          if (optionMatch && question.options) {
+            const optionIdx = parseInt(optionMatch[1], 10) - 1;
+            const optionValue = question.options[optionIdx];
+            
+            // Check if this option was selected
+            if (Array.isArray(answer)) {
+              matchedValue = answer.includes(optionValue) ? '1' : '0';
+            } else {
+              matchedValue = '0';
+            }
+          }
+          break;
+        }
+      } else {
+        // Single-value question
+        if (header === normalizedCode || header.startsWith(normalizedCode + '_')) {
+          const answer = getAnswerByCode(question.code);
+          
+          if (answer === null || answer === undefined) {
+            matchedValue = '';
+          } else if (Array.isArray(answer)) {
+            matchedValue = answer.join(';');
+          } else {
+            matchedValue = String(answer);
+          }
+          break;
+        }
+      }
+    }
+    
+    row.push(matchedValue);
+  });
+  
+  return row;
 };
 
 /**
