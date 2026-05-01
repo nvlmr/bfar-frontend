@@ -20,11 +20,101 @@ const QUESTION_TYPES = [
   { value: 'multiple_choice', label: 'Multiple Choice' },
   { value: 'checkboxes', label: 'Checkboxes' },
   { value: 'dropdown', label: 'Dropdown' },
-  { value: 'short_text', label: 'Short Text' },
-  { value: 'long_text', label: 'Long Text' },
   { value: 'date', label: 'Date' },
   { value: 'rating', label: 'Rating Scale (1-5)' }
 ];
+
+// Automatic code generation based on question position
+// Auto-detects section and generates proper CSV format
+const generateQuestionCode = (questionIndex, questionType, options = []) => {
+  // Define section ranges (based on BFAR survey structure)
+  // B: 0-4 (5 questions) - Demographics (2-digit: B01-B05)
+  // C: 5-8 (4 questions) - Income (2-digit: C01-C04)
+  // D: 9-30 (22 questions) - Assets (1-digit with sub-items: D1.1-D4.7)
+  // E: 31-40 (10 questions) - Living Conditions (1-digit: E1-E5)
+  // F: 41-48 (8 questions) - Properties (1-digit: F1-F2)
+  // G: 49-60 (12 questions) - Insurance (1-digit: G1-G6)
+  // H: 61-68 (8 questions) - Social Services (1-digit: H1-H8)
+  // I: 69-80 (12 questions) - Fishing Experience (1-digit: I1-I8)
+  // J: 81+ - Program Participation (1-digit with sub-items: J1-J7)
+  
+  const sectionRanges = [
+    { section: 'B', start: 0, end: 4, useTwoDigit: true },      // B01-B05
+    { section: 'C', start: 5, end: 8, useTwoDigit: true },      // C01-C04
+    { section: 'D', start: 9, end: 30, useTwoDigit: false },     // D1.1-D4.7
+    { section: 'E', start: 31, end: 40, useTwoDigit: false },    // E1-E5
+    { section: 'F', start: 41, end: 48, useTwoDigit: false },   // F1-F2
+    { section: 'G', start: 49, end: 60, useTwoDigit: false },   // G1-G6
+    { section: 'H', start: 61, end: 68, useTwoDigit: false },   // H1-H8
+    { section: 'I', start: 69, end: 80, useTwoDigit: false },    // I1-I8
+    { section: 'J', start: 81, end: 999, useTwoDigit: false }   // J1-J7
+  ];
+  
+  // Find which section this question belongs to
+  const sectionInfo = sectionRanges.find(range => questionIndex >= range.start && questionIndex <= range.end);
+  const section = sectionInfo ? sectionInfo.section : 'K';
+  const useTwoDigit = sectionInfo ? sectionInfo.useTwoDigit : false;
+  
+  // Calculate position within section
+  const positionInSection = sectionInfo ? questionIndex - sectionInfo.start + 1 : questionIndex - 81 + 1;
+  
+  let code;
+  
+  if (useTwoDigit) {
+    // Sections B, C: B03, C01, etc.
+    code = `${section}${positionInSection.toString().padStart(2, '0')}`;
+  } else {
+    // Sections D-J: D1.1, E1, F1.1, etc.
+    // For sections with sub-items, we auto-generate sub-question numbers
+    if (section === 'D' || section === 'J') {
+      // These sections have sub-items
+      const mainNum = Math.ceil(positionInSection / 2); // Every 2 questions = new main number
+      const subNum = ((positionInSection - 1) % 2) + 1;  // Alternates between 1 and 2
+      code = `${section}${mainNum}.${subNum}`;
+    } else {
+      // Simple sequential numbering
+      code = `${section}${positionInSection}`;
+    }
+  }
+  
+  return code;
+};
+
+// Check if question should be skipped (long text, short text, names, addresses, comments)
+const shouldSkipQuestion = (questionType, title = '') => {
+  const skipTypes = ['short_text', 'long_text'];
+  const skipKeywords = ['name', 'address', 'comment', 'specify', 'consent', 'text'];
+  
+  if (skipTypes.includes(questionType)) return true;
+  
+  const lowerTitle = title.toLowerCase();
+  return skipKeywords.some(keyword => lowerTitle.includes(keyword));
+};
+
+// Generate all CSV headers for a form with question titles
+// Format: CODE:Title (e.g., B03:Age, B05:Sex)
+const generateCSVHeaders = (questions) => {
+  const headers = [];
+  
+  questions.forEach((question) => {
+    if (!shouldSkipQuestion(question.type, question.title) && question.code) {
+      // Create sanitized title (remove special characters that could break CSV)
+      const sanitizedTitle = question.title
+        .replace(/,/g, '') // Remove commas
+        .replace(/:/g, '') // Remove colons
+        .trim();
+      
+      // Format: B03:Age or just B03 if no title
+      const header = sanitizedTitle 
+        ? `${question.code}:${sanitizedTitle}` 
+        : question.code;
+      
+      headers.push(header);
+    }
+  });
+  
+  return headers.join(',');
+};
 
 const FormBuilder = () => {
   const navigate = useNavigate();
@@ -58,14 +148,15 @@ const FormBuilder = () => {
   };
 
   const addQuestion = () => {
+    const questionIndex = formData.questions.length;
     const newQuestion = {
       id: `q_${Date.now()}`,
-      type: 'multiple_choice',               // default changed
+      type: 'multiple_choice',
       title: '',
-      code: '',
+      code: generateQuestionCode(questionIndex, 'multiple_choice', ['Option 1', 'Option 2']),
       description: '',
       required: false,
-      options: ['Option 1', 'Option 2']      // now needed for multiple_choice
+      options: ['Option 1', 'Option 2']
     };
     setFormData({
       ...formData,
@@ -95,16 +186,24 @@ const FormBuilder = () => {
         delete question.options;
       }
 
+      // Regenerate code based on new position
+      question.code = generateQuestionCode(questionIndex, value, question.options);
+
       updatedQuestions[questionIndex] = question;
       return { ...prev, questions: updatedQuestions };
     });
   };
 
   const deleteQuestion = (index) => {
-    setFormData((prev) => ({
-      ...prev,
-      questions: prev.questions.filter((_, i) => i !== index)
-    }));
+    setFormData((prev) => {
+      const remainingQuestions = prev.questions.filter((_, i) => i !== index);
+      // Regenerate codes for all remaining questions based on new positions
+      const updatedQuestions = remainingQuestions.map((question, newIndex) => ({
+        ...question,
+        code: generateQuestionCode(newIndex, question.type, question.options)
+      }));
+      return { ...prev, questions: updatedQuestions };
+    });
   };
 
   const addOption = (questionIndex) => {
@@ -170,18 +269,10 @@ const FormBuilder = () => {
       }
     }
 
-    // Validate unique question codes (if any codes are provided)
-    const codesWithValues = processedFormData.questions
-      .map(q => (q.code || '').trim())
-      .filter(code => code.length > 0);
-
-    if (codesWithValues.length > 0) {
-      const uniqueCodes = new Set(codesWithValues);
-      if (uniqueCodes.size !== codesWithValues.length) {
-        toast.error('Question codes must be unique');
-        return;
-      }
-    }
+    // Generate CSV headers before saving
+    const csvHeaders = generateCSVHeaders(processedFormData.questions);
+    processedFormData.csvHeaders = csvHeaders;
+    processedFormData.csvColumnCount = csvHeaders.split(',').length;
 
     setLoading(true);
     try {
@@ -218,15 +309,28 @@ const FormBuilder = () => {
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
-            <Button
-              data-testid="back-to-dashboard-button"
-              onClick={() => navigate('/dashboard')}
-              variant="ghost"
-              className="text-slate-600 hover:text-[#003366]"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                data-testid="back-to-dashboard-button"
+                onClick={() => navigate('/dashboard')}
+                variant="ghost"
+                className="text-slate-600 hover:text-[#003366]"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Dashboard
+              </Button>
+              <Button
+                data-testid="preview-csv-button"
+                onClick={() => {
+                  const headers = generateCSVHeaders(formData.questions);
+                  alert('CSV Headers:\n' + headers);
+                }}
+                variant="outline"
+                className="text-[#003366] border-[#003366]"
+              >
+                Preview CSV Headers
+              </Button>
+            </div>
             <Button
               data-testid="save-form-button"
               onClick={handleSave}
@@ -286,17 +390,6 @@ const FormBuilder = () => {
                         onChange={(e) => updateQuestion(qIndex, 'title', e.target.value)}
                         className="form-input mt-2"
                       />
-                      <div className="mt-3">
-                        <Label className="text-sm text-slate-600">Question Code (optional)</Label>
-                        <Input
-                          data-testid={`question-code-${qIndex}`}
-                          type="text"
-                          placeholder="B03:AGE"
-                          value={question.code || ''}
-                          onChange={(e) => updateQuestion(qIndex, 'code', e.target.value)}
-                          className="form-input mt-2"
-                        />
-                      </div>
                     </div>
                     <div className="w-48">
                       <Label className="text-[#003366]">Type</Label>
