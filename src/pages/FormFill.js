@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { FileText, Check } from 'lucide-react';
+import { FileText, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,12 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import axios from 'axios';
-import { preprocessFormAnswers, validatePreprocessedData } from '../lib/preprocessing';
 import { api } from '../lib/apiMiddleware';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 const FormFill = () => {
   const { id } = useParams();
@@ -23,75 +18,124 @@ const FormFill = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [answers, setAnswers] = useState({});
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
+  const [sections, setSections] = useState([]);
 
-  useEffect(() => {
-    fetchForm();
-  }, [id]);
-
-  const fetchForm = async () => {
+  const fetchForm = useCallback(async () => {
     try {
       const response = await api.get(`/forms/public/${id}`);
-      setForm(response.data);
+      const fetchedForm = response.data;
+      setForm(fetchedForm);
+
+      let formSections = [];
+
+      if (fetchedForm.sections && fetchedForm.sections.length > 0) {
+        // Use stored sections if available
+        formSections = fetchedForm.sections;
+        console.log('Using stored sections:', formSections);
+      } else if (fetchedForm.questions && fetchedForm.questions.length > 0) {
+        // Group by each question's 'section' property
+        const sectionMap = new Map();
+        fetchedForm.questions.forEach(q => {
+          const secName = q.section && q.section.trim() ? q.section : 'Section 1';
+          if (!sectionMap.has(secName)) sectionMap.set(secName, []);
+          sectionMap.get(secName).push(q);
+        });
+        formSections = Array.from(sectionMap.entries()).map(([title, questions], idx) => ({
+          id: `sec_${idx}`,
+          title,
+          questions
+        }));
+        console.log('Built sections from question.section:', formSections);
+      } else {
+        // No questions – create one empty section
+        formSections = [{ id: 'default', title: 'Section 1', questions: [] }];
+      }
+
+      setSections(formSections);
+
       const initialAnswers = {};
-      response.data.questions.forEach((q) => {
-        if (q.type === 'checkboxes') {
-          initialAnswers[q.id] = [];
-        } else if (q.type === 'rating') {
-          initialAnswers[q.id] = 3;
-        } else {
-          initialAnswers[q.id] = '';
-        }
+      const allQuestions = formSections.flatMap(s => s.questions);
+      allQuestions.forEach(q => {
+        if (q.type === 'checkboxes') initialAnswers[q.id] = [];
+        else if (q.type === 'rating') initialAnswers[q.id] = 3;
+        else initialAnswers[q.id] = '';
       });
       setAnswers(initialAnswers);
     } catch (error) {
+      console.error(error);
       toast.error('Form not found');
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    fetchForm();
+  }, [fetchForm]);
 
   const handleCheckboxChange = (questionId, option, checked) => {
-    const currentAnswers = answers[questionId] || [];
-    if (checked) {
-      setAnswers({ ...answers, [questionId]: [...currentAnswers, option] });
-    } else {
-      setAnswers({ ...answers, [questionId]: currentAnswers.filter((opt) => opt !== option) });
+    const current = answers[questionId] || [];
+    if (checked) setAnswers({ ...answers, [questionId]: [...current, option] });
+    else setAnswers({ ...answers, [questionId]: current.filter(opt => opt !== option) });
+  };
+
+  const validateCurrentSection = () => {
+    const currentQs = sections[currentSectionIndex]?.questions || [];
+    for (const q of currentQs) {
+      if (q.required) {
+        const ans = answers[q.id];
+        const isEmpty = !ans || (Array.isArray(ans) && ans.length === 0);
+        if (isEmpty) {
+          toast.error(`Please answer: ${q.title}`);
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  const handleNext = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!validateCurrentSection()) return;
+    if (currentSectionIndex < sections.length - 1) {
+      setCurrentSectionIndex(currentSectionIndex + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handlePrevious = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (currentSectionIndex > 0) {
+      setCurrentSectionIndex(currentSectionIndex - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validateCurrentSection()) return;
 
-    // --- Prevent duplicate submissions by email ---
     try {
       const existingResponses = await api.get(`/forms/public/${id}/responses`);
-      const duplicate = (existingResponses.data || []).some(r => (r.email || r.user?.email || r.full_name) === answers.email);
+      const duplicate = (existingResponses.data || []).some(r =>
+        (r.email || r.user?.email || r.full_name) === answers.email
+      );
       if (duplicate) {
         toast.error('This email has already submitted a response for this survey.');
         return;
       }
-    } catch (err) {
-      // If error fetching, allow submit (fail open)
-    }
-
-    // Preprocess the answers
-    const preprocessedAnswers = preprocessFormAnswers(answers, form.questions);
-
-    // Validate preprocessed data
-    const validation = validatePreprocessedData(preprocessedAnswers, form.questions);
-    if (!validation.isValid) {
-      validation.errors.forEach(error => toast.error(error));
-      return;
-    }
+    } catch (err) {}
 
     setSubmitting(true);
     try {
-      const formattedAnswers = form.questions.map((q) => ({
+      const allQuestions = sections.flatMap(s => s.questions);
+      const formattedAnswers = allQuestions.map(q => ({
         question_id: q.id,
-        answer: preprocessedAnswers[q.id]
+        answer: answers[q.id]
       }));
-
-      // Save user info as top-level fields for easier retrieval in FormResponses
       await api.post(`/forms/public/${id}/responses`, {
         email: answers.email,
         full_name: answers.full_name,
@@ -99,7 +143,6 @@ const FormFill = () => {
         gender: answers.gender,
         answers: formattedAnswers
       });
-
       setSubmitted(true);
       toast.success('Response submitted successfully!');
     } catch (error) {
@@ -109,39 +152,24 @@ const FormFill = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F8FDFF] flex items-center justify-center">
-        <p className="text-slate-600">Loading form...</p>
-      </div>
-    );
-  }
-
-  if (!form) {
-    return (
-      <div className="min-h-screen bg-[#F8FDFF] flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-[#003366] mb-2">Form not found</h2>
-          <p className="text-slate-600">This form may have been deleted or is no longer available.</p>
+  if (loading) return <div className="min-h-screen bg-[#F8FDFF] flex items-center justify-center">Loading form...</div>;
+  if (!form) return <div className="min-h-screen bg-[#F8FDFF] flex items-center justify-center">Form not found</div>;
+  if (submitted) return (
+    <div className="min-h-screen bg-[#F8FDFF] flex items-center justify-center">
+      <div className="text-center max-w-md">
+        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+          <Check className="w-10 h-10 text-green-600" />
         </div>
+        <h2 className="text-3xl font-bold text-[#003366] mb-4">Thank You!</h2>
+        <p className="text-lg text-slate-600 mb-2">Your response has been submitted successfully.</p>
+        <p className="text-sm text-slate-500">You can close this page now.</p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (submitted) {
-    return (
-      <div className="min-h-screen bg-[#F8FDFF] flex items-center justify-center">
-        <div className="text-center max-w-md" data-testid="submission-success">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Check className="w-10 h-10 text-green-600" />
-          </div>
-          <h2 className="text-3xl font-bold text-[#003366] mb-4">Thank You!</h2>
-          <p className="text-lg text-slate-600 mb-2">Your response has been submitted successfully.</p>
-          <p className="text-sm text-slate-500">You can close this page now.</p>
-        </div>
-      </div>
-    );
-  }
+  const current = sections[currentSectionIndex];
+  const isFirst = currentSectionIndex === 0;
+  const isLast = currentSectionIndex === sections.length - 1;
 
   return (
     <div className="min-h-screen bg-[#F8FDFF] py-12">
@@ -154,143 +182,73 @@ const FormFill = () => {
             <h1 className="text-xl font-bold text-[#003366]">General Assessment e-Forms</h1>
           </div>
           <h2 className="text-3xl md:text-4xl font-bold text-[#003366] mb-3">{form.title}</h2>
-          {form.description && (
-            <p className="text-base text-slate-600 leading-relaxed">{form.description}</p>
-          )}
+          {form.description && <p className="text-base text-slate-600 leading-relaxed">{form.description}</p>}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6" data-testid="form-fill">
-          {form.questions.map((question, index) => (
-            <div key={question.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-6" data-testid={`question-${index}`}>
+        <div className="mb-4 text-sm text-slate-500">
+          Section {currentSectionIndex + 1} of {sections.length}: <span className="font-semibold text-[#003366]">{current.title}</span>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {current.questions.map((question, idx) => (
+            <div key={question.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
               <Label className="text-lg font-semibold text-[#003366] mb-2 block">
-                {index + 1}. {question.title}
+                {idx + 1}. {question.title}
                 {question.required && <span className="text-red-500 ml-1">*</span>}
               </Label>
-              {question.description && (
-                <p className="text-sm text-slate-600 mb-4">{question.description}</p>
-              )}
+              {question.description && <p className="text-sm text-slate-600 mb-4">{question.description}</p>}
 
               {question.type === 'short_text' && (
-                <Input
-                  data-testid={`answer-${index}`}
-                  type="text"
-                  placeholder="Your answer"
-                  value={answers[question.id] || ''}
-                  onChange={(e) => setAnswers({ ...answers, [question.id]: e.target.value })}
-                  className="form-input"
-                  required={question.required}
-                />
+                <Input value={answers[question.id] || ''} onChange={e => setAnswers({ ...answers, [question.id]: e.target.value })} required={question.required} />
               )}
-
               {question.type === 'long_text' && (
-                <Textarea
-                  data-testid={`answer-${index}`}
-                  placeholder="Your answer"
-                  value={answers[question.id] || ''}
-                  onChange={(e) => setAnswers({ ...answers, [question.id]: e.target.value })}
-                  className="form-input"
-                  rows={4}
-                  required={question.required}
-                />
+                <Textarea value={answers[question.id] || ''} onChange={e => setAnswers({ ...answers, [question.id]: e.target.value })} rows={4} required={question.required} />
               )}
-
               {question.type === 'multiple_choice' && (
-                <RadioGroup
-                  data-testid={`answer-${index}`}
-                  value={answers[question.id] || ''}
-                  onValueChange={(value) => setAnswers({ ...answers, [question.id]: value })}
-                  required={question.required}
-                >
-                  {question.options?.map((option, oIndex) => (
-                    <div key={oIndex} className="flex items-center space-x-2 mb-2">
-                      <RadioGroupItem value={option} id={`${question.id}-${oIndex}`} data-testid={`option-${index}-${oIndex}`} />
-                      <Label htmlFor={`${question.id}-${oIndex}`} className="text-base font-normal cursor-pointer">
-                        {option}
-                      </Label>
+                <RadioGroup value={answers[question.id] || ''} onValueChange={v => setAnswers({ ...answers, [question.id]: v })} required={question.required}>
+                  {question.options?.map((opt, oi) => (
+                    <div key={oi} className="flex items-center space-x-2 mb-2">
+                      <RadioGroupItem value={opt} id={`${question.id}-${oi}`} />
+                      <Label htmlFor={`${question.id}-${oi}`} className="text-base font-normal cursor-pointer">{opt}</Label>
                     </div>
                   ))}
                 </RadioGroup>
               )}
-
               {question.type === 'checkboxes' && (
-                <div data-testid={`answer-${index}`} className="space-y-2">
-                  {question.options?.map((option, oIndex) => (
-                    <div key={oIndex} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`${question.id}-${oIndex}`}
-                        data-testid={`option-${index}-${oIndex}`}
-                        checked={answers[question.id]?.includes(option)}
-                        onCheckedChange={(checked) => handleCheckboxChange(question.id, option, checked)}
-                      />
-                      <Label htmlFor={`${question.id}-${oIndex}`} className="text-base font-normal cursor-pointer">
-                        {option}
-                      </Label>
+                <div className="space-y-2">
+                  {question.options?.map((opt, oi) => (
+                    <div key={oi} className="flex items-center space-x-2">
+                      <Checkbox id={`${question.id}-${oi}`} checked={answers[question.id]?.includes(opt)} onCheckedChange={c => handleCheckboxChange(question.id, opt, c)} />
+                      <Label htmlFor={`${question.id}-${oi}`} className="text-base font-normal cursor-pointer">{opt}</Label>
                     </div>
                   ))}
                 </div>
               )}
-
               {question.type === 'dropdown' && (
-                <Select
-                  value={answers[question.id] || ''}
-                  onValueChange={(value) => setAnswers({ ...answers, [question.id]: value })}
-                  required={question.required}
-                >
-                  <SelectTrigger data-testid={`answer-${index}`} className="form-input">
-                    <SelectValue placeholder="Select an option" />
-                  </SelectTrigger>
+                <Select value={answers[question.id] || ''} onValueChange={v => setAnswers({ ...answers, [question.id]: v })} required={question.required}>
+                  <SelectTrigger><SelectValue placeholder="Select an option" /></SelectTrigger>
                   <SelectContent>
-                    {question.options?.map((option, oIndex) => (
-                      <SelectItem key={oIndex} value={option} data-testid={`option-${index}-${oIndex}`}>
-                        {option}
-                      </SelectItem>
-                    ))}
+                    {question.options?.map((opt, oi) => <SelectItem key={oi} value={opt}>{opt}</SelectItem>)}
                   </SelectContent>
                 </Select>
               )}
-
               {question.type === 'date' && (
-                <Input
-                  data-testid={`answer-${index}`}
-                  type="date"
-                  value={answers[question.id] || ''}
-                  onChange={(e) => setAnswers({ ...answers, [question.id]: e.target.value })}
-                  className="form-input"
-                  required={question.required}
-                />
+                <Input type="date" value={answers[question.id] || ''} onChange={e => setAnswers({ ...answers, [question.id]: e.target.value })} required={question.required} />
               )}
-
               {question.type === 'rating' && (
-                <div className="flex space-x-4" data-testid={`answer-${index}`}>
-                  {[1, 2, 3, 4, 5].map((rating) => (
-                    <button
-                      key={rating}
-                      type="button"
-                      data-testid={`rating-${index}-${rating}`}
-                      onClick={() => setAnswers({ ...answers, [question.id]: rating })}
-                      className={`w-12 h-12 rounded-lg border-2 font-semibold transition-all ${
-                        answers[question.id] === rating
-                          ? 'bg-[#003366] text-white border-[#003366]'
-                          : 'bg-white text-slate-600 border-slate-300 hover:border-[#00AEEF]'
-                      }`}
-                    >
-                      {rating}
+                <div className="flex space-x-4">
+                  {[1,2,3,4,5].map(r => (
+                    <button key={r} type="button" onClick={() => setAnswers({ ...answers, [question.id]: r })} className={`w-12 h-12 rounded-lg border-2 font-semibold transition-all ${answers[question.id] === r ? 'bg-[#003366] text-white border-[#003366]' : 'bg-white text-slate-600 border-slate-300 hover:border-[#00AEEF]'}`}>
+                      {r}
                     </button>
                   ))}
                 </div>
               )}
             </div>
           ))}
-
-          <div className="flex justify-end pt-4">
-            <Button
-              type="submit"
-              data-testid="submit-form-button"
-              disabled={submitting}
-              className="bg-[#003366] hover:bg-[#002244] text-white px-8 py-6 text-lg shadow-lg hover:shadow-xl transition-all"
-            >
-              {submitting ? 'Submitting...' : 'Submit Response'}
-            </Button>
+          <div className="flex justify-between pt-4">
+            <Button type="button" onClick={handlePrevious} disabled={isFirst} variant="outline" className="text-[#003366]"><ChevronLeft className="w-4 h-4 mr-2" /> Previous</Button>
+            {!isLast ? <Button type="button" onClick={handleNext} className="bg-[#003366] hover:bg-[#002244] text-white">Next <ChevronRight className="w-4 h-4 ml-2" /></Button> : <Button type="submit" disabled={submitting} className="bg-green-600 hover:bg-green-700 text-white px-8 py-2 text-lg shadow-lg">{submitting ? 'Submitting...' : 'Submit Response'}</Button>}
           </div>
         </form>
       </div>

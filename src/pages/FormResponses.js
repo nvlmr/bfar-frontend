@@ -1,301 +1,289 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, FileText, Download, Brain } from 'lucide-react';
+import { ArrowLeft, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import axios from 'axios';
 import { api } from '../lib/apiMiddleware';
-import { 
-  preprocessResponsesForML, 
-  mapResponseToBFARColumns,
-  generateBFARHeaders 
-} from '../lib/preprocessing';
+import { generateBFARHeaders, mapResponseToBFARColumns } from '../lib/preprocessing';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+// ==================== UTILITY FUNCTIONS ====================
+const isNoAnswer = (val) => !val || val === '' || val === '--' || (Array.isArray(val) && val.length === 0);
 
+// Convert an answer to its option index (1‑based) if it's a multiple‑choice type
+const getNumericAnswer = (answer, question) => {
+  if (isNoAnswer(answer)) return '—';
+  
+  // For checkboxes (array) -> return comma‑separated indices
+  if (question.type === 'checkboxes' && Array.isArray(answer)) {
+    const indices = answer
+      .map(opt => {
+        const idx = (question.options || []).findIndex(o => o === opt);
+        return idx !== -1 ? idx + 1 : null;
+      })
+      .filter(i => i !== null);
+    return indices.length ? indices.join(',') : '—';
+  }
+  
+  // For multiple‑choice and dropdown
+  if (['multiple_choice', 'dropdown'].includes(question.type)) {
+    const idx = (question.options || []).findIndex(o => o === answer);
+    return idx !== -1 ? (idx + 1).toString() : answer; // fallback to raw if not found
+  }
+  
+  // Rating, date, text – keep as is
+  return answer;
+};
+
+// ==================== MAIN COMPONENT ====================
 const FormResponses = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const [form, setForm] = useState(null);
   const [responses, setResponses] = useState([]);
-  const [mlProcessedResponses, setMlProcessedResponses] = useState([]);
-  const [mlEnabled, setMlEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sections, setSections] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  useEffect(() => {
-    fetchData();
-  }, [id]);
-
-  const fetchData = async () => {
+  // Fetch form and responses
+  const fetchData = useCallback(async () => {
     try {
       const [formRes, responsesRes] = await Promise.all([
         api.get(`/forms/${id}`),
         api.get(`/forms/${id}/responses`)
       ]);
-      setForm(formRes.data); 
+      const fetchedForm = formRes.data;
+      setForm(fetchedForm);
       setResponses(responsesRes.data);
 
-      // Process responses for ML preprocessing
-      if (responsesRes.data && responsesRes.data.length > 0) {
-        const mlProcessed = preprocessResponsesForML(responsesRes.data, formRes.data.questions || []);
-        setMlProcessedResponses(mlProcessed);
+      // Build sections (same logic as before)
+      let formSections = [];
+      if (fetchedForm.sections && fetchedForm.sections.length > 0) {
+        formSections = fetchedForm.sections;
+      } else if (fetchedForm.questions && fetchedForm.questions.length > 0) {
+        const groupMap = new Map();
+        fetchedForm.questions.forEach(q => {
+          const sectionName = (q.section && q.section.trim()) ? q.section : 'Section 1';
+          if (!groupMap.has(sectionName)) groupMap.set(sectionName, []);
+          groupMap.get(sectionName).push(q);
+        });
+        formSections = Array.from(groupMap.entries()).map(([title, questions], idx) => ({
+          id: `section_${idx}`,
+          title,
+          questions
+        }));
+      } else {
+        formSections = [{ id: 'default', title: 'Section 1', questions: [] }];
       }
-
-      // console.log(responsesRes.data);
+      setSections(formSections);
     } catch (error) {
       toast.error('Failed to fetch responses');
       navigate('/dashboard');
     } finally {
       setLoading(false);
     }
+  }, [id, navigate]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Helper to get raw answer for a question (used in table display)
+  const getAnswerForQuestion = (response, question) => {
+    const answersArray = response.answers || [];
+    const matched = answersArray.find(a => a.question_id === question.id);
+    if (matched && !isNoAnswer(matched.answer)) return matched.answer;
+    const byTitle = answersArray.find(a => a.question_title === question.title);
+    if (byTitle && !isNoAnswer(byTitle.answer)) return byTitle.answer;
+    if (answersArray.length && typeof answersArray[0] !== 'object') {
+      const allQs = sections.flatMap(s => s.questions);
+      const idx = allQs.findIndex(q => q.id === question.id);
+      if (idx >= 0 && idx < answersArray.length && !isNoAnswer(answersArray[idx])) return answersArray[idx];
+    }
+    return null;
   };
 
-  const escapeCsvValue = (value) => {
-    const text = value === null || value === undefined ? '' : String(value);
-    return `"${text.replace(/"/g, '""')}"`;
-  };
+  // Format answer for table display (keeps original text)
+  const formatAnswerForTable = (ans) => isNoAnswer(ans) ? '—' : (Array.isArray(ans) ? ans.join(', ') : String(ans));
 
+  // ==================== CSV DOWNLOAD WITH PREPROCESSING ====================
   const downloadCSV = () => {
     if (responses.length === 0) {
       toast.error('No responses to download');
       return;
     }
+
+    // All questions (flat list)
+    const allQuestions = sections.flatMap(s => s.questions);
     
-    // Generate headers dynamically from form questions
-    const headers = generateBFARHeaders(form.questions);
+    // Identify the beneficiary question by its code "BENE"
+    const beneQuestion = allQuestions.find(q => q.code === 'BENE');
+    // All other questions that have a non‑empty code and are not the beneficiary question
+    const validQuestions = allQuestions.filter(q => 
+      q.code && q.code.trim() && q !== beneQuestion
+    );
     
-    // Map each response to CSV row
-    const rows = responses.map((response, index) => {
-      return mapResponseToBFARColumns(response, form.questions, headers, index);
+    if (validQuestions.length === 0 && !beneQuestion) {
+      toast.error('No questions with a valid Question Code – cannot generate CSV');
+      return;
+    }
+
+    // CSV header: "RESPONDENT" + each valid question's "CODE:TITLE"
+    const headers = ['RESPONDENT', ...validQuestions.map(q => {
+      const title = q.title.replace(/,/g, '').replace(/:/g, '').trim();
+      return `${q.code}:${title}`;
+    })];
+
+    // Build rows
+    const rows = responses.map((response, idx) => {
+      // 1. Determine beneficiary prefix
+      let prefix = '';
+      if (beneQuestion) {
+        const beneAnswer = getAnswerForQuestion(response, beneQuestion);
+        // Assume first option is "Yes" (beneficiary) – adjust if your options differ
+        const isBene = beneAnswer && (beneAnswer === 'Yes' || beneAnswer === 'Bene' || beneAnswer === beneQuestion.options?.[0]);
+        prefix = isBene ? 'B-' : 'NB-';
+      }
+      
+      // Respondent ID – adjust field name if your backend uses something else
+      const rawRespondent = response.respondent_id || response.id || `R-${idx+1}`;
+      const respondentId = prefix ? `${prefix}${rawRespondent}` : rawRespondent;
+      
+      // 2. For each valid question, get numeric‑converted answer
+      const rowValues = validQuestions.map(q => {
+        const rawAns = getAnswerForQuestion(response, q);
+        const numericAns = getNumericAnswer(rawAns, q);
+        return String(numericAns);
+      });
+      
+      return [respondentId, ...rowValues];
     });
-    
-    // Build CSV string
+
+    // Generate CSV
     const csvLines = [
       headers.join(','),
-      ...rows.map(row => row.map(cell => escapeCsvValue(cell)).join(','))
+      ...rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
     ];
-    
     const csv = csvLines.join('\r\n');
-    
-    // Download
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `${form.title.replace(/\s+/g, '_')}-responses.csv`;
     a.click();
-    window.URL.revokeObjectURL(url);
-    
+    URL.revokeObjectURL(url);
     toast.success('CSV downloaded successfully');
   };
+  // ===============================================================
 
-  const getResponderMetadata = (response) => {
-    // Prefer top-level fields (from new responses)
-    const name = response.full_name || response.name || response.respondent_name || response.respondent?.name || response.user?.name;
-    const age = response.age || response.respondent?.age || response.user?.age;
-    const sex = response.gender || response.sex || response.respondent?.sex || response.respondent?.gender || response.user?.sex || response.user?.gender;
-    const email = response.email || response.user?.email || response.respondent?.email;
+  // Table rendering (unchanged from working version)
+  if (loading) return <div className="min-h-screen bg-[#F8FDFF] flex items-center justify-center">Loading responses...</div>;
+  if (!form) return null;
 
-    const answerMap = (response.answers || []).reduce((map, answer) => {
-      const label = (answer.question_title || answer.question_label || answer.label || '').toString().toLowerCase();
-      if (label) {
-        map[label] = answer.answer;
-      }
-      return map;
-    }, {});
+  const allQuestions = sections.flatMap(s => s.questions);
+  const totalPages = Math.ceil(responses.length / rowsPerPage);
+  const start = (currentPage - 1) * rowsPerPage;
+  const paginated = responses.slice(start, start + rowsPerPage);
+  const goToPage = (page) => setCurrentPage(Math.max(1, Math.min(page, totalPages)));
 
-    return {
-      name: name || answerMap['name'] || answerMap['full name'] || answerMap['respondent name'] || answerMap['participant name'],
-      age: age || answerMap['age'],
-      sex: sex || answerMap['sex'] || answerMap['gender'],
-      email: email || answerMap['email']
-    };
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F8FDFF] flex items-center justify-center">
-        <p className="text-slate-600">Loading responses...</p>
-      </div>
-    );
-  }
+  // Indices for vertical borders
+  let colIdx = 0;
+  const sectionLastIndices = [];
+  sections.forEach(section => {
+    colIdx += section.questions.length;
+    sectionLastIndices.push(colIdx - 1);
+  });
 
   return (
     <div className="min-h-screen bg-[#F8FDFF]">
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="flex justify-between items-center">
-            <Button
-              data-testid="back-to-dashboard-button"
-              onClick={() => navigate('/dashboard')}
-              variant="ghost"
-              className="text-slate-600 hover:text-[#003366]"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-            <div className="flex items-center gap-4">
-              {responses.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <Brain className="w-4 h-4 text-slate-600" />
-                  <span className="text-sm text-slate-600">ML Analysis</span>
-                  <Switch
-                    checked={mlEnabled}
-                    onCheckedChange={setMlEnabled}
-                    className="data-[state=checked]:bg-[#003366]"
-                  />
-                </div>
-              )}
-              <Button
-                data-testid="download-csv-button"
-                onClick={downloadCSV}
-                variant="outline"
-                disabled={responses.length === 0}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Download CSV
-              </Button>
-            </div>
-          </div>
-        </div>
+      <nav className="bg-white border-b sticky top-0 z-50 p-4 flex justify-between">
+        <Button variant="ghost" onClick={() => navigate('/dashboard')}><ArrowLeft className="mr-2 h-4 w-4"/> Dashboard</Button>
+        <Button variant="outline" onClick={downloadCSV} disabled={responses.length === 0}><Download className="mr-2 h-4 w-4"/> CSV</Button>
       </nav>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="mb-8">
-          <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-[#003366] mb-2">{form.title}</h2>
-          <p className="text-base text-slate-600">
-            {responses.length} {responses.length === 1 ? 'response' : 'responses'}
-          </p>
-        </div>
-
+      <div className="max-w-full mx-auto px-4 py-12">
+        <h2 className="text-3xl font-semibold text-[#003366]">{form.title}</h2>
+        <p className="text-slate-600 mb-6">{responses.length} responses — grouped by section</p>
         {responses.length === 0 ? (
-          <div className="text-center py-20" data-testid="no-responses">
-            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-10 h-10 text-slate-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-slate-700 mb-2">No responses yet</h3>
-            <p className="text-slate-600">Share your form to start collecting responses</p>
-          </div>
+          <div className="text-center py-20">No responses yet</div>
         ) : (
-          <div className="space-y-6" data-testid="responses-list">
-            {responses.map((response, rIndex) => (
-              <Card key={response.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-6" data-testid={`response-${rIndex}`}>
-                <div className="mb-4 pb-4 border-b border-slate-100">
-                  <p className="text-sm text-slate-500">
-                    Submitted: {
-                      response.submitted_at?._seconds
-                        ? new Date(response.submitted_at._seconds * 1000).toLocaleString()
-                        : "No date"
-                    }
-                  </p>
+          <>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <span>Rows per page:</span>
+                <Select value={rowsPerPage.toString()} onValueChange={(v) => { setRowsPerPage(Number(v)); setCurrentPage(1); }}>
+                  <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-4">
+                <span>Page {currentPage} of {totalPages}</span>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="outline" onClick={() => goToPage(currentPage-1)} disabled={currentPage===1}><ChevronLeft className="h-4 w-4"/></Button>
+                  <Button size="sm" variant="outline" onClick={() => goToPage(currentPage+1)} disabled={currentPage===totalPages}><ChevronRight className="h-4 w-4"/></Button>
                 </div>
-                <div className="space-y-4">
-                  {(() => {
-                    const responder = getResponderMetadata(response);
-                    return (responder.name || responder.age || responder.sex || responder.email) ? (
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <p className="text-sm uppercase tracking-[0.18em] text-slate-500 mb-3">Responder</p>
-                        <div className="grid gap-3 sm:grid-cols-4 text-sm">
-                          {responder.name && (
-                            <div>
-                              <p className="text-slate-600">Name</p>
-                              <p className="font-medium text-slate-900">{responder.name}</p>
-                            </div>
-                          )}
-                          {responder.email && (
-                            <div>
-                              <p className="text-slate-600">Email</p>
-                              <p className="font-medium text-slate-900">{responder.email}</p>
-                            </div>
-                          )}
-                          {responder.age && (
-                            <div>
-                              <p className="text-slate-600">Age</p>
-                              <p className="font-medium text-slate-900">{responder.age}</p>
-                            </div>
-                          )}
-                          {responder.sex && (
-                            <div>
-                              <p className="text-slate-600">Sex</p>
-                              <p className="font-medium text-slate-900">{responder.sex}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : null;
-                  })()}
-                  {form.questions.map((question, qIndex) => {
-                    const answer = response.answers.find((a) => a.question_id === question.id);
-                    const mlData = mlEnabled ? mlProcessedResponses.find(r => r.id === response.id)?.[`${question.id}_ml`] : null;
-
-                    return (
-                      <div key={question.id} data-testid={`response-${rIndex}-question-${qIndex}`}>
-                        <p className="font-semibold text-[#003366] mb-2">{question.title}</p>
-                        <div className="space-y-2">
-                          <p className="text-slate-700">
-                            {answer ? (
-                              Array.isArray(answer.answer) ? (
-                                answer.answer.join(', ')
-                              ) : (
-                                answer.answer
-                              )
-                            ) : (
-                              <span className="text-slate-400">No answer</span>
-                            )}
-                          </p>
-
-                          {/* ML Analysis Display */}
-                          {mlEnabled && mlData && (question.type === 'short_text' || question.type === 'long_text') && (
-                            <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                              <h5 className="text-sm font-medium text-slate-700 mb-2">AI Analysis:</h5>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                                <div>
-                                  <span className="text-slate-600">Words:</span>
-                                  <span className="ml-1 font-medium">{mlData.features.wordCount}</span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-600">Sentiment:</span>
-                                  <span className={`ml-1 font-medium ${
-                                    mlData.features.sentimentScore > 0.1 ? 'text-green-600' :
-                                    mlData.features.sentimentScore < -0.1 ? 'text-red-600' : 'text-slate-600'
-                                  }`}>
-                                    {mlData.features.sentimentScore > 0 ? '+' : ''}{mlData.features.sentimentScore.toFixed(2)}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-600">Readability:</span>
-                                  <span className="ml-1 font-medium">{mlData.features.readabilityScore.toFixed(1)}/10</span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-600">Unique Words:</span>
-                                  <span className="ml-1 font-medium">{mlData.features.uniqueWords}</span>
-                                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th rowSpan={2} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider sticky left-0 bg-slate-50 z-10 border-r border-slate-200">#</th>
+                      <th rowSpan={2} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Submitted At</th>
+                      {sections.map(section => (
+                        <th key={section.id} colSpan={section.questions.length} className="px-6 py-2 text-center text-sm font-semibold text-slate-700 bg-slate-100 border-b border-slate-200">
+                          {section.title}
+                        </th>
+                      ))}
+                    </tr>
+                    <tr>
+                      {sections.flatMap((section, secIdx) =>
+                        section.questions.map((q, qIdx) => {
+                          const isLastCol = (secIdx === sections.length - 1 && qIdx === section.questions.length - 1);
+                          return (
+                            <th key={q.id} className={`px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider ${!isLastCol ? 'border-r border-slate-300' : ''}`}>
+                              <div className="max-w-xs truncate" title={q.title}>
+                                Q{allQuestions.findIndex(qq => qq.id === q.id) + 1}: {q.title}
                               </div>
-                              {mlData.tokens.length > 0 && (
-                                <div className="mt-2">
-                                  <span className="text-slate-600 text-xs">Key terms:</span>
-                                  <div className="flex flex-wrap gap-1 mt-1">
-                                    {mlData.tokens.slice(0, 8).map((token, idx) => (
-                                      <span key={idx} className="inline-block bg-[#003366] text-white text-xs px-2 py-1 rounded-full">
-                                        {token}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            ))}
-          </div>
+                            </th>
+                          );
+                        })
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-100">
+                    {paginated.map((resp, idx) => {
+                      const submittedAt = resp.submitted_at?._seconds ? new Date(resp.submitted_at._seconds*1000).toLocaleString() : 'No date';
+                      const globalIdx = start + idx + 1;
+                      return (
+                        <tr key={resp.id} className="hover:bg-slate-50">
+                          <td className="sticky left-0 bg-white px-6 py-4 text-sm border-r border-slate-200">{globalIdx}</td>
+                          <td className="px-6 py-4 text-sm">{submittedAt}</td>
+                          {allQuestions.map((q, colIdx) => {
+                            const ans = getAnswerForQuestion(resp, q);
+                            const hasRightBorder = sectionLastIndices.includes(colIdx);
+                            return (
+                              <td key={q.id} className={`px-6 py-4 text-sm max-w-xs truncate ${hasRightBorder ? 'border-r border-slate-200' : ''}`} title={formatAnswerForTable(ans)}>
+                                {formatAnswerForTable(ans)}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {totalPages > 1 && (
+              <div className="flex justify-center mt-6 gap-2">
+                <Button size="sm" variant="outline" onClick={() => goToPage(currentPage-1)} disabled={currentPage===1}>Previous</Button>
+                <span className="px-4 py-2">Page {currentPage} of {totalPages}</span>
+                <Button size="sm" variant="outline" onClick={() => goToPage(currentPage+1)} disabled={currentPage===totalPages}>Next</Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
