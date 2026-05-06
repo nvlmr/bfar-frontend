@@ -9,6 +9,7 @@ import FormBuilder from './pages/FormBuilder';
 import FormFill from './pages/FormFill';
 import FormResponses from './pages/FormResponses';
 import FormAnalytics from './pages/FormAnalytics';
+import MLUpload from './pages/MLUpload';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import VerifyAccount from './pages/VerifyAccount';
 import ForgotPassword from './pages/ForgotPassword';
@@ -36,6 +37,7 @@ function App() {
           <Route path="/forms/:id/edit" element={<ProtectedRoute><FormBuilder /></ProtectedRoute>} />
           <Route path="/forms/:id/responses" element={<ProtectedRoute><FormResponses /></ProtectedRoute>} />
           <Route path="/forms/:id/analytics" element={<ProtectedRoute><FormAnalytics /></ProtectedRoute>} />
+          <Route path="/ml-upload" element={<ProtectedRoute><MLUpload /></ProtectedRoute>} />
           <Route path="/f/:id" element={<FormFill />} />
         </Routes>
         <Toaster />
