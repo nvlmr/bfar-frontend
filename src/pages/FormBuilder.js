@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Plus, Trash2, ArrowLeft, Save, ChevronLeft, ChevronRight, Layers, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,11 +41,38 @@ const generateCSVHeaders = (questions) => {
 const FormBuilder = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const location = useLocation();
   const isEditMode = !!id;
+  
+  // Check for imported CSV data
+  const importedData = location.state?.importedData;
+  const isImportMode = !!importedData && !isEditMode;
 
-  const [formData, setFormData] = useState({ title: '', description: '', questions: [] });
+  const [formData, setFormData] = useState({ 
+    title: importedData?.title || '', 
+    description: importedData?.description || '', 
+    questions: [] 
+  });
+  
   const [sections, setSections] = useState(() => {
-    if (!isEditMode) return [{ id: `section_${Date.now()}`, title: 'Untitled Section', questions: [] }];
+    if (isImportMode && importedData?.fields) {
+      // Create sections from imported CSV fields
+      return [{
+        id: `section_${Date.now()}`,
+        title: 'Imported Fields',
+        questions: importedData.fields.map((field, index) => ({
+          id: field.id,
+          title: field.label,
+          type: 'short_text',
+          required: field.required || false,
+          placeholder: field.placeholder || '',
+          code: field.label.toLowerCase().replace(/\s+/g, '_'),
+          section: 'Imported Fields'
+        }))
+      }];
+    } else if (!isEditMode) {
+      return [{ id: `section_${Date.now()}`, title: 'Untitled Section', questions: [] }];
+    }
     return [];
   });
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
