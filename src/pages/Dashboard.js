@@ -13,7 +13,8 @@ import {
   Filter,
   Fish,
   Clock,
-  CalendarDays
+  CalendarDays,
+  Brain
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -311,17 +312,26 @@ const Dashboard = () => {
           </div>
 
           <div className="rounded-3xl bg-white border border-slate-200/70 shadow-lg shadow-slate-900/5 p-6">
-            <div className="flex items-center justify-between mb-6">
+            <div className="mb-6">
               <div>
                 <p className="text-sm text-slate-500">Quick actions</p>
-                <h3 className="text-xl font-semibold text-slate-900">New form</h3>
+                <h3 className="text-xl font-semibold text-slate-900">Get started</h3>
               </div>
+            </div>
+            <div className="flex gap-3 mb-6">
               <Button
                 onClick={() => navigate('/forms/new')}
-                className="bg-gradient-to-r from-[#0a2540] to-[#1a5490] text-white hover:shadow-xl"
+                className="flex-1 bg-gradient-to-r from-[#0a2540] to-[#1a5490] text-white hover:shadow-xl"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Form
+              </Button>
+              <Button
+                onClick={() => navigate('/ml-upload')}
+                className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:shadow-xl"
+              >
+                <Brain className="w-4 h-4 mr-2" />
+                ML Analysis
               </Button>
             </div>
             <div className="space-y-4">
