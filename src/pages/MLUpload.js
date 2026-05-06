@@ -5,7 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Upload, FileSpreadsheet, Database, BarChart3, ArrowLeft, Import } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Upload, FileSpreadsheet, Database, BarChart3, ArrowLeft, Import, ChevronLeft, ChevronRight, FileText, TrendingUp, Activity } from 'lucide-react';
 
 const MLUpload = () => {
   const navigate = useNavigate();
@@ -16,6 +19,15 @@ const MLUpload = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  
+  // Analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResults, setAnalysisResults] = useState(null);
+  const [activeTab, setActiveTab] = useState('summary');
 
   // Handle file selection
   const handleFileSelect = (event) => {
@@ -96,6 +108,7 @@ const MLUpload = () => {
         }).filter(row => Object.values(row).some(value => value.trim())); // Filter empty rows
         
         setCsvData(data);
+        setCurrentPage(1); // Reset to first page when new data is loaded
         setIsLoading(false);
         
       } catch (err) {
@@ -181,9 +194,59 @@ const MLUpload = () => {
   };
 
   // Handle analyze button click
-  const handleAnalyze = () => {
-    console.log('Analyze button clicked - placeholder for future implementation');
-    // Placeholder for future ML analysis functionality
+  const handleAnalyze = async () => {
+    if (csvData.length === 0) {
+      setError('No data available to analyze');
+      return;
+    }
+    
+    setIsAnalyzing(true);
+    setError(null);
+    
+    try {
+      // Simulate ML analysis processing
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Mock analysis results
+      const mockResults = {
+        summary: {
+          totalRows: csvData.length,
+          totalColumns: columns.length,
+          dataTypes: columns.map(col => ({
+            name: col,
+            type: 'text',
+            uniqueValues: Math.floor(Math.random() * 100) + 1,
+            nullCount: Math.floor(Math.random() * 10)
+          })),
+          completeness: Math.floor(Math.random() * 30) + 70,
+          analysisTime: '2.3s'
+        },
+        output: {
+          predictions: csvData.slice(0, 5).map((row, index) => ({
+            id: index + 1,
+            input: row,
+            prediction: Math.random() > 0.5 ? 'Positive' : 'Negative',
+            confidence: (Math.random() * 0.4 + 0.6).toFixed(3)
+          })),
+          modelAccuracy: (Math.random() * 0.2 + 0.8).toFixed(3),
+          confidence: (Math.random() * 0.3 + 0.7).toFixed(3)
+        },
+        metrics: {
+          accuracy: (Math.random() * 0.2 + 0.8).toFixed(3),
+          precision: (Math.random() * 0.2 + 0.8).toFixed(3),
+          recall: (Math.random() * 0.2 + 0.8).toFixed(3),
+          f1Score: (Math.random() * 0.2 + 0.8).toFixed(3),
+          rocAuc: (Math.random() * 0.2 + 0.8).toFixed(3)
+        }
+      };
+      
+      setAnalysisResults(mockResults);
+      setActiveTab('summary');
+    } catch (err) {
+      setError('Analysis failed. Please try again.');
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   // Handle back to dashboard
@@ -205,30 +268,26 @@ const MLUpload = () => {
         type: 'text', // Default to text field
         label: column,
         required: false,
-        placeholder: `Enter ${column}`
-      }));
 
-      const formData = {
-        title: `Imported Form - ${file?.name?.replace('.csv', '') || 'CSV Data'}`,
-        description: `Form created from CSV import with ${columns.length} fields and ${csvData.length} data rows`,
-        fields: formFields
-      };
-
-      // Navigate to form builder with pre-filled data
-      navigate('/forms/new', { state: { importedData: formData } });
-    } catch (err) {
-      setError('Failed to create form from CSV data');
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <Button
-            onClick={handleBackToDashboard}
-            variant="outline"
+return (
+  <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <Button
+          onClick={handleBackToDashboard}
+          variant="outline"
+          className="bg-white hover:bg-slate-50"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Dashboard
+        </Button>
+        <div className="text-center space-y-2">
+          <h1 className="text-4xl font-bold text-slate-900 flex items-center justify-center gap-3">
+            <BarChart3 className="w-10 h-10 text-blue-600" />
+            Machine Learning Analysis
+          </h1>
+          <p className="text-slate-600 text-lg">Upload your CSV data for intelligent analysis</p>
             className="bg-white hover:bg-slate-50"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
