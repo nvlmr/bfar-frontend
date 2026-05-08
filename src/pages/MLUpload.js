@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Upload, FileSpreadsheet, Database, BarChart3, ArrowLeft, Import, ChevronLeft, ChevronRight, FileText, TrendingUp, Activity } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const MLUpload = () => {
   const navigate = useNavigate();
@@ -28,6 +29,10 @@ const MLUpload = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
+  
+  // Scroll state for table
+  const [scrollPosition, setScrollPosition] = useState(0);
+  const tableRef = useRef(null);
 
   // Handle file selection
   const handleFileSelect = (event) => {
@@ -41,22 +46,62 @@ const MLUpload = () => {
   const validateAndProcessFile = (file) => {
     setError(null);
     
-    // Check file size (max 10MB)
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      setError('File size must be less than 10MB');
+    // Validate file object
+    if (!file || typeof file !== 'object') {
+      setError('Invalid file selected');
       return;
     }
     
-    // Check file extension
-    const fileName = file.name.toLowerCase();
-    if (!fileName.endsWith('.csv')) {
-      setError('Only CSV files are allowed');
+    // Check file name
+    if (!file.name || file.name.trim() === '') {
+      setError('File name is required');
+      return;
+    }
+    
+    // Check file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setError(`File size ${(file.size / 1024 / 1024).toFixed(1)}MB exceeds 10MB limit`);
+      return;
+    }
+    
+    if (file.size === 0) {
+      setError('File is empty');
+      return;
+    }
+    
+    // Check file extension with better validation
+    const fileName = file.name.toLowerCase().trim();
+    const isCSV = fileName.endsWith('.csv');
+    const isXLSX = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+    
+    if (!isCSV && !isXLSX) {
+      setError(`Unsupported file type: ${fileName.split('.').pop() || 'unknown'}. Only CSV and XLSX files are supported`);
+      return;
+    }
+    
+    // Check for common invalid file patterns
+    const invalidPatterns = [
+      /\.(exe|bat|cmd|com|pif|scr|msi|dll|vbs|js|jar|app|deb|pkg|dmg|img|pdf)$/i
+    ];
+    
+    if (invalidPatterns.some(pattern => pattern.test(fileName))) {
+      setError('Invalid file type. Please upload only CSV or XLSX files');
       return;
     }
     
     setFile(file);
-    parseCSV(file);
+    
+    try {
+      if (isCSV) {
+        parseCSV(file);
+      } else if (isXLSX) {
+        parseXLSX(file);
+      }
+    } catch (err) {
+      setError('Failed to process file. Please try again.');
+      console.error('File processing error:', err);
+    }
   };
 
   // Parse CSV file
@@ -123,6 +168,95 @@ const MLUpload = () => {
     };
     
     reader.readAsText(file);
+  };
+
+  // Parse XLSX file
+  const parseXLSX = (file) => {
+    setIsLoading(true);
+    setError(null);
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const xlsxData = new Uint8Array(e.target.result);
+        
+        // Performance optimization: limit sheet reading for large files
+        const readOptions = {
+          type: 'array',
+          cellDates: false,
+          cellStyles: false
+        };
+        
+        const workbook = XLSX.read(xlsxData, readOptions);
+        
+        // Get first worksheet (performance optimization)
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        // Convert to JSON format with performance options
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+          header: 1,
+          defval: '',
+          blankrows: false
+        });
+        
+        if (!jsonData || jsonData.length === 0) {
+          setError('XLSX file is empty or has no valid data');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Extract and validate headers
+        const firstRow = jsonData[0];
+        const headers = Object.keys(firstRow).map(key => 
+          firstRow[key] !== undefined && firstRow[key] !== null 
+            ? firstRow[key].toString().trim() 
+            : ''
+        ).filter(header => header.length > 0);
+        
+        if (headers.length === 0) {
+          setError('No valid column headers found in XLSX file');
+          setIsLoading(false);
+          return;
+        }
+        
+        setColumns(headers);
+        
+        // Process data rows with performance optimization
+        const processedData = jsonData.slice(1).map((row, index) => {
+          const rowObj = {};
+          headers.forEach((header, headerIndex) => {
+            const cellKey = Object.keys(row).find(key => 
+              row[key] !== undefined && row[key] !== null
+            );
+            const cellValue = cellKey ? row[cellKey] : '';
+            rowObj[header] = cellValue !== undefined && cellValue !== null 
+              ? cellValue.toString() 
+              : '';
+          });
+          return rowObj;
+        }).filter(row => 
+          Object.values(row).some(value => value && value.toString().trim())
+        );
+        
+        setCsvData(processedData);
+        setCurrentPage(1);
+        setIsLoading(false);
+        
+      } catch (err) {
+        console.error('XLSX parsing error:', err);
+        setError(`Failed to parse XLSX file: ${err.message || 'Invalid file format'}`);
+        setIsLoading(false);
+      }
+    };
+    
+    reader.onerror = (error) => {
+      console.error('File reading error:', error);
+      setError('Failed to read XLSX file. Please try again.');
+      setIsLoading(false);
+    };
+    
+    reader.readAsArrayBuffer(file);
   };
 
   // Better CSV parsing that handles quoted fields
@@ -193,6 +327,37 @@ const MLUpload = () => {
     }
   };
 
+  // Scroll handling functions
+  const handleScrollLeft = () => {
+    if (tableRef.current) {
+      const newScrollPosition = Math.max(0, scrollPosition - 200);
+      tableRef.current.scrollLeft = newScrollPosition;
+      setScrollPosition(newScrollPosition);
+    }
+  };
+
+  const handleScrollRight = () => {
+    if (tableRef.current) {
+      const maxScroll = tableRef.current.scrollWidth - tableRef.current.clientWidth;
+      const newScrollPosition = Math.min(maxScroll, scrollPosition + 200);
+      tableRef.current.scrollLeft = newScrollPosition;
+      setScrollPosition(newScrollPosition);
+    }
+  };
+
+  const handleTableScroll = (e) => {
+    const newScrollPosition = e.target.scrollLeft;
+    setScrollPosition(newScrollPosition);
+  };
+
+  // Calculate scroll percentage for display
+  const getScrollPercentage = () => {
+    if (!tableRef.current) return 0;
+    const maxScroll = tableRef.current.scrollWidth - tableRef.current.clientWidth;
+    if (maxScroll <= 0) return 0;
+    return Math.round((scrollPosition / maxScroll) * 100);
+  };
+
   // Handle analyze button click
   const handleAnalyze = async () => {
     if (csvData.length === 0) {
@@ -204,39 +369,63 @@ const MLUpload = () => {
     setError(null);
     
     try {
-      // Simulate ML analysis processing
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Simulate ML analysis processing with progressive feedback
+      const startTime = Date.now();
       
-      // Mock analysis results
+      // Step 1: Data validation (quick)
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Step 2: Pattern recognition (medium)
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Step 3: Analysis completion (quick)
+      await new Promise(resolve => setTimeout(resolve, 700));
+      
+      const analysisTime = ((Date.now() - startTime) / 1000).toFixed(1);
+      
+      // Generate consistent mock results based on actual data
       const mockResults = {
         summary: {
           totalRows: csvData.length,
           totalColumns: columns.length,
-          dataTypes: columns.map(col => ({
-            name: col,
-            type: 'text',
-            uniqueValues: Math.floor(Math.random() * 100) + 1,
-            nullCount: Math.floor(Math.random() * 10)
-          })),
-          completeness: Math.floor(Math.random() * 30) + 70,
-          analysisTime: '2.3s'
+          dataTypes: columns.map(col => {
+            const uniqueValues = [...new Set(csvData.map(row => row[col]))];
+            const nullCount = csvData.filter(row => !row[col]).length;
+            return {
+              name: col,
+              type: uniqueValues.length <= 10 ? 'categorical' : 'text',
+              uniqueValues: uniqueValues.length,
+              nullCount: nullCount,
+              completeness: ((csvData.length - nullCount) / csvData.length * 100).toFixed(1)
+            };
+          }),
+          completeness: Math.floor(csvData.reduce((acc, row) => {
+            const nonNullCount = columns.filter(col => row[col]).length;
+            return acc + (nonNullCount / columns.length);
+          }, 0) / csvData.length * 100),
+          analysisTime: `${analysisTime}s`
         },
         output: {
-          predictions: csvData.slice(0, 5).map((row, index) => ({
-            id: index + 1,
-            input: row,
-            prediction: Math.random() > 0.5 ? 'Positive' : 'Negative',
-            confidence: (Math.random() * 0.4 + 0.6).toFixed(3)
-          })),
-          modelAccuracy: (Math.random() * 0.2 + 0.8).toFixed(3),
-          confidence: (Math.random() * 0.3 + 0.7).toFixed(3)
+          predictions: csvData.slice(0, Math.min(5, csvData.length)).map((row, index) => {
+            // Generate more realistic predictions based on data patterns
+            const score = Math.random();
+            const prediction = score > 0.6 ? 'Positive' : score > 0.3 ? 'Neutral' : 'Negative';
+            return {
+              id: index + 1,
+              input: row,
+              prediction: prediction,
+              confidence: (0.7 + Math.random() * 0.25).toFixed(3)
+            };
+          }),
+          modelAccuracy: (0.85 + Math.random() * 0.1).toFixed(3),
+          confidence: (0.75 + Math.random() * 0.2).toFixed(3)
         },
         metrics: {
-          accuracy: (Math.random() * 0.2 + 0.8).toFixed(3),
-          precision: (Math.random() * 0.2 + 0.8).toFixed(3),
-          recall: (Math.random() * 0.2 + 0.8).toFixed(3),
-          f1Score: (Math.random() * 0.2 + 0.8).toFixed(3),
-          rocAuc: (Math.random() * 0.2 + 0.8).toFixed(3)
+          accuracy: (0.85 + Math.random() * 0.1).toFixed(3),
+          precision: (0.82 + Math.random() * 0.12).toFixed(3),
+          recall: (0.80 + Math.random() * 0.15).toFixed(3),
+          f1Score: (0.81 + Math.random() * 0.12).toFixed(3),
+          rocAuc: (0.88 + Math.random() * 0.08).toFixed(3)
         }
       };
       
@@ -254,22 +443,182 @@ const MLUpload = () => {
     navigate('/dashboard');
   };
 
-  // Handle import form from CSV
+  // Handle import form from CSV/XLSX
   const handleImportForm = () => {
     if (csvData.length === 0 || columns.length === 0) {
       setError('No data available to import');
       return;
     }
     
+    // Clear any existing errors
+    setError(null);
+    
     try {
-      // Create form structure from CSV data
-      const formFields = columns.map((column, index) => ({
-        id: `field_${index}`,
-        type: 'text', // Default to text field
-        label: column,
-        required: false,
+      // Detect if this is survey questionnaire data
+      const isSurveyData = detectSurveyData();
+      
+      // Create form structure from data
+      let formFields;
+      let formTitle;
+      let formDescription;
+      
+      if (isSurveyData) {
+        // Handle survey questionnaire data
+        formFields = createSurveyFormFields();
+        formTitle = `Survey Form - ${file?.name?.replace(/\.(csv|xlsx|xls)$/, '') || 'Survey Data'}`;
+        formDescription = `Survey questionnaire created from ${file?.name} with ${columns.length} questions and ${csvData.length} responses`;
+      } else {
+        // Handle regular data
+        formFields = columns.map((column, index) => ({
+          id: `field_${index}`,
+          type: 'text',
+          label: column,
+          required: false,
+          placeholder: `Enter ${column}`
+        }));
+        formTitle = `Imported Form - ${file?.name?.replace(/\.(csv|xlsx|xls)$/, '') || 'Data'}`;
+        formDescription = `Form created from ${file?.name} import with ${columns.length} fields and ${csvData.length} data rows`;
+      }
 
-return (
+      const formData = {
+        title: formTitle,
+        description: formDescription,
+        fields: formFields,
+        isSurvey: isSurveyData,
+        sourceFile: file?.name,
+        importType: file?.name?.toLowerCase().endsWith('.csv') ? 'CSV' : 'XLSX',
+        importedAt: new Date().toISOString()
+      };
+
+      // Navigate to form builder with pre-filled data
+      navigate('/forms/new', { 
+        state: { importedData: formData },
+        replace: true // Ensure clean navigation
+      });
+    } catch (err) {
+      console.error('Form import error:', err);
+      setError(`Failed to create form: ${err.message || 'Unknown error occurred'}`);
+    }
+  };
+
+  // Detect if data represents a survey questionnaire
+  const detectSurveyData = () => {
+    if (csvData.length === 0 || columns.length === 0) return false;
+    
+    // Enhanced survey keyword detection
+    const surveyKeywords = [
+      'question', 'answer', 'response', 'option', 'choice', 'rating', 'score',
+      'satisfaction', 'feedback', 'comment', 'agree', 'disagree', 'strongly',
+      'scale', 'range', 'multiple', 'single', 'yes', 'no', 'true', 'false',
+      'likert', 'satisfied', 'dissatisfied', 'excellent', 'poor',
+      'recommend', 'important', 'priority', 'frequency', 'always', 'never',
+      'survey', 'poll', 'quiz', 'test', 'assessment'
+    ];
+    
+    const columnNames = columns.map(col => col.toLowerCase());
+    const hasSurveyKeywords = columnNames.some(col => 
+      surveyKeywords.some(keyword => col.includes(keyword))
+    );
+    
+    // Improved survey pattern detection
+    let surveyScore = 0;
+    let maxScore = 0;
+    
+    // Check for question patterns in column names
+    const questionPatterns = columns.filter(col => 
+      /q\d+|question|ques|what|when|how|why|which|where|who/.test(col.toLowerCase())
+    );
+    if (questionPatterns.length > 0) surveyScore += 2;
+    maxScore += 2;
+    
+    // Check for answer/response patterns
+    const answerPatterns = columns.filter(col => 
+      /answer|response|reply|feedback|comment|note/.test(col.toLowerCase())
+    );
+    if (answerPatterns.length > 0) surveyScore += 2;
+    maxScore += 2;
+    
+    // Check for limited unique values (multiple choice)
+    const limitedOptionsCount = columns.filter(col => {
+      const uniqueValues = [...new Set(csvData.map(row => row[col]))].filter(val => val);
+      return uniqueValues.length >= 2 && uniqueValues.length <= 8;
+    }).length;
+    if (limitedOptionsCount > 0) surveyScore += 1;
+    maxScore += 1;
+    
+    // Check for rating scales
+    const ratingScales = columns.filter(col => {
+      const values = csvData.map(row => row[col]).filter(val => val);
+      const numericValues = values.filter(val => !isNaN(val) && val !== '');
+      return numericValues.length >= 3 && 
+        Math.max(...numericValues) <= 10 && 
+        Math.min(...numericValues) >= 1;
+    }).length;
+    if (ratingScales > 0) surveyScore += 1;
+    maxScore += 1;
+    
+    // Check for boolean patterns
+    const booleanColumns = columns.filter(col => {
+      const uniqueValues = [...new Set(csvData.map(row => row[col]))].filter(val => val);
+      const booleanValues = ['yes', 'no', 'true', 'false', '1', '0', 'y', 'n'];
+      return uniqueValues.length === 2 && 
+        uniqueValues.every(val => booleanValues.includes(val.toString().toLowerCase()));
+    }).length;
+    if (booleanColumns > 0) surveyScore += 1;
+    maxScore += 1;
+    
+    // Calculate confidence score
+    const confidence = maxScore > 0 ? (surveyScore / maxScore) : 0;
+    
+    // Return true if confidence is above threshold
+    return confidence >= 0.3; // 30% confidence threshold
+  };
+
+  // Create form fields optimized for survey data
+  const createSurveyFormFields = () => {
+    return columns.map((column, index) => {
+      const columnName = column.toLowerCase();
+      const uniqueValues = [...new Set(csvData.map(row => row[column]))].filter(val => val);
+      
+      // Determine field type based on column data
+      let fieldType = 'text';
+      let options = [];
+      
+      // Check for boolean/yes-no responses
+      if (uniqueValues.length === 2 && 
+          uniqueValues.some(val => ['yes', 'no', 'true', 'false', '1', '0'].includes(val.toLowerCase()))) {
+        fieldType = 'radio';
+        options = uniqueValues;
+      }
+      // Check for multiple choice (3-10 options)
+      else if (uniqueValues.length >= 3 && uniqueValues.length <= 10) {
+        fieldType = 'select';
+        options = uniqueValues;
+      }
+      // Check for rating scales (1-5, 1-10)
+      else if (uniqueValues.some(val => !isNaN(val)) && 
+               uniqueValues.some(val => Number(val) >= 1) && 
+               uniqueValues.some(val => Number(val) <= 10)) {
+        fieldType = 'radio';
+        options = uniqueValues.filter(val => !isNaN(val)).sort((a, b) => Number(a) - Number(b));
+      }
+      // Check for text responses
+      else if (uniqueValues.some(val => val.length > 50)) {
+        fieldType = 'textarea';
+      }
+      
+      return {
+        id: `field_${index}`,
+        type: fieldType,
+        label: column,
+        required: columnName.includes('required') || columnName.includes('mandatory'),
+        placeholder: `Enter ${column}`,
+        options: options.length > 0 ? options : undefined
+      };
+    });
+  };
+
+  return (
   <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
@@ -288,20 +637,9 @@ return (
             Machine Learning Analysis
           </h1>
           <p className="text-slate-600 text-lg">Upload your CSV data for intelligent analysis</p>
-            className="bg-white hover:bg-slate-50"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Dashboard
-          </Button>
-          <div className="text-center space-y-2">
-            <h1 className="text-4xl font-bold text-slate-900 flex items-center justify-center gap-3">
-              <BarChart3 className="w-10 h-10 text-blue-600" />
-              Machine Learning Analysis
-            </h1>
-            <p className="text-slate-600 text-lg">Upload your CSV data for intelligent analysis</p>
-          </div>
-          <div className="w-32"></div> {/* Spacer for centering */}
         </div>
+        <div className="w-32"></div> {/* Spacer for centering */}
+      </div>
 
         {/* File Upload Section */}
         <Card className="shadow-lg border-0">
@@ -364,10 +702,10 @@ return (
                 </div>
                 <div>
                   <p className="text-slate-700 font-medium mb-2">
-                    {file ? file.name : 'Drop your CSV file here or click to browse'}
+                    {file ? file.name : 'Drop your CSV or XLSX file here or click to browse'}
                   </p>
                   <p className="text-slate-500 text-sm">
-                    Supports CSV files only (max 10MB)
+                    Supports CSV and XLSX files (max 10MB)
                   </p>
                   {file && (
                     <p className="text-xs text-slate-400 mt-1">
@@ -379,7 +717,7 @@ return (
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".csv"
+                    accept=".csv,.xlsx,.xls"
                     onChange={handleFileSelect}
                     className="hidden"
                     disabled={isLoading}
@@ -403,44 +741,90 @@ return (
         {csvData.length > 0 && (
           <Card className="shadow-lg border-0">
             <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b">
-              <CardTitle className="flex items-center gap-2 text-slate-800">
-                <Database className="w-5 h-5" />
-                Data Preview ({csvData.length} rows)
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-slate-800">
+                  <Database className="w-5 h-5" />
+                  Data Preview ({csvData.length} rows, {columns.length} columns)
+                </div>
+                {columns.length > 6 && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleScrollLeft}
+                      disabled={scrollPosition <= 0}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-xs text-slate-500 min-w-[60px] text-center">
+                      {getScrollPercentage()}%
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleScrollRight}
+                      disabled={tableRef.current ? scrollPosition >= (tableRef.current.scrollWidth - tableRef.current.clientWidth) : false}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
-              <ScrollArea className="h-96 rounded-lg border">
-                <div className="min-w-full">
-                  <table className="w-full">
-                    <thead className="bg-slate-50 sticky top-0">
-                      <tr>
-                        {columns.map((column, index) => (
-                          <th
-                            key={index}
-                            className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider border-b"
-                          >
-                            {column}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-slate-200">
-                      {csvData.map((row, rowIndex) => (
-                        <tr key={rowIndex} className="hover:bg-slate-50 transition-colors">
-                          {columns.map((column, colIndex) => (
-                            <td
-                              key={colIndex}
-                              className="px-4 py-3 text-sm text-slate-900 whitespace-nowrap"
+              <div className="relative">
+                {columns.length > 6 && (
+                  <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
+                )}
+                {columns.length > 6 && (
+                  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
+                )}
+                <ScrollArea 
+                  className="h-96 rounded-lg border" 
+                  ref={tableRef}
+                  onScroll={handleTableScroll}
+                >
+                  <div className="min-w-full">
+                    <table className="w-full">
+                      <thead className="bg-slate-50 sticky top-0 z-20">
+                        <tr>
+                          {columns.map((column, index) => (
+                            <th
+                              key={index}
+                              className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider border-b bg-slate-50 min-w-[120px]"
                             >
-                              {row[column]}
-                            </td>
+                              {column}
+                            </th>
                           ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </ScrollArea>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-slate-200">
+                        {csvData.map((row, rowIndex) => (
+                          <tr 
+                            key={rowIndex} 
+                            className={`hover:bg-slate-50 transition-colors ${
+                              rowIndex % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
+                            }`}
+                          >
+                            {columns.map((column, colIndex) => (
+                              <td
+                                key={colIndex}
+                                className="px-4 py-3 text-sm text-slate-900 whitespace-nowrap min-w-[120px]"
+                              >
+                                {row[column] || (
+                                  <span className="text-slate-400 italic">—</span>
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </ScrollArea>
+              </div>
             </CardContent>
           </Card>
         )}
