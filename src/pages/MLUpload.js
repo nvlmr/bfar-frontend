@@ -29,6 +29,7 @@ const MLUpload = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
+  const [showPreview, setShowPreview] = useState(false);
   
   // Scroll state for table
   const [scrollPosition, setScrollPosition] = useState(0);
@@ -91,6 +92,7 @@ const MLUpload = () => {
     }
     
     setFile(file);
+    setShowPreview(false);
     
     try {
       if (isCSV) {
@@ -367,6 +369,7 @@ const MLUpload = () => {
     
     setIsAnalyzing(true);
     setError(null);
+    setShowPreview(true);
     
     try {
       // Simulate ML analysis processing with progressive feedback
@@ -738,7 +741,7 @@ const MLUpload = () => {
         </Card>
 
         {/* Data Table Preview */}
-        {csvData.length > 0 && (
+        {csvData.length > 0 && showPreview && (
           <Card className="shadow-lg border-0">
             <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b">
               <CardTitle className="flex items-center justify-between">
